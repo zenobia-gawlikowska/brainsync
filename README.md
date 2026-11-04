@@ -1,6 +1,10 @@
 # brainsync (spike)
 
-> *Me, poking git with a stick: "C'mon, do the work."*
+<p align="center">
+  <img src="docs/meme.jpg" alt="Hand-drawn stick figure labelled ME poking a red git logo labelled GIT with a stick, saying: C'mon, do the work" width="480">
+</p>
+
+With brainsync, git finally does the work.
 
 A Claude Code skill that lets non-technical people use a GitHub repository as a **collective second brain**. They say "push" and "pull"; Claude handles saving, pull requests, merging and overlapping edits. It's a chat-native successor to [AcceleraTTy](https://github.com/zenobia-gawlikowska/acceleratty), which did the same thing with a local web UI.
 
