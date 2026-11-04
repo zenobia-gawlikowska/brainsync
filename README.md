@@ -6,6 +6,14 @@
 
 With brainsync, git finally does the work.
 
+<p align="center">
+  <a href="docs/brainsync-now-git-does-the-work.mp4">
+    <img src="docs/video-poster.png" alt="Still from the explainer video: a stick figure surrounded by git jargon (commit, branch, rebase, pull request, merge conflict) next to the git ball" width="640">
+  </a>
+  <br>
+  <a href="docs/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
+</p>
+
 A Claude Code skill that lets non-technical people use a GitHub repository as a **collective second brain**. They say "push" and "pull"; Claude handles saving, pull requests, merging and overlapping edits. It's a chat-native successor to [AcceleraTTy](https://github.com/zenobia-gawlikowska/acceleratty), which did the same thing with a local web UI.
 
 ## What the user sees
