@@ -1,0 +1,8 @@
+{
+  "name": "brainsync",
+  "version": "0.1.0",
+  "description": "Use a GitHub repository as a team second brain without knowing git: just say push or pull. PRs, merging and overlapping edits are handled automatically.",
+  "author": {
+    "name": "Zenobia Gawlikowska"
+  }
+}

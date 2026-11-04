@@ -1,0 +1,11 @@
+{
+  "name": "brainsync",
+  "owner": { "name": "Zenobia Gawlikowska" },
+  "plugins": [
+    {
+      "name": "brainsync",
+      "source": "./",
+      "description": "Git-free push/pull for a shared GitHub second brain."
+    }
+  ]
+}

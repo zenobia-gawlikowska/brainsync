@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Minimal stand-in for the GitHub CLI, backed by a local bare repo.
+# Env: FAKE_GH_REMOTE (bare repo path), FAKE_GH_STATE (dir), FAKE_GH_LOGIN,
+#      FAKE_GH_REQUIRE_REVIEW=1, FAKE_GH_NO_MERGE_COMMITS=1,
+#      FAKE_GH_BEFORE_MERGE (script run once before the next merge — simulates a race)
+set -uo pipefail
+S=$FAKE_GH_STATE; mkdir -p "$S"; touch "$S/prs"
+case "$1 ${2:-}" in
+  "auth status") exit 0 ;;
+  "auth git-credential") exit 0 ;;
+  "api user")
+    case "$4" in .login|'.name // .login') echo "$FAKE_GH_LOGIN" ;; .id) echo 42 ;; esac ;;
+  "repo clone") git clone -q "$FAKE_GH_REMOTE" "$4" ;;
+  "pr list")  # --head B --base M ...
+    head=$4
+    case "$*" in *number,url*) fmt=both ;; *) fmt=url ;; esac
+    awk -v h="$head" -v f="$fmt" '$2==h && $4=="open" {u="https://github.com/fake/brain/pull/"$1; print (f=="both" ? $1" "u : u); exit}' "$S/prs" ;;
+  "pr edit") exit 0 ;;
+  "pr view")  # pr view N --json state --jq .state
+    awk -v n="$3" '$1==n {print toupper($4)}' "$S/prs" ;;
+  "pr create")  # --base M --head B --title T --body X
+    base=$4; head=$6
+    n=$(( $(wc -l < "$S/prs") + 1 ))
+    echo "$n $head $base open" >> "$S/prs"
+    # Simulate GitHub's 502-after-success seen live: PR is created but the call fails.
+    if [ -n "${FAKE_GH_FLAKY_CREATE:-}" ] && [ ! -f "$S/flaked" ]; then
+      touch "$S/flaked"; echo "pull request create failed: HTTP 502: 502 Bad Gateway (https://api.github.com/graphql)" >&2; exit 1; fi
+    echo "https://github.com/fake/brain/pull/$n" ;;
+  "pr merge")
+    n=$3; method=$4; auto=""; [ "${5:-}" = "--merge" ] || [ "${5:-}" = "--squash" ] && true
+    [ "$4" = "--auto" ] && { auto=1; method=$5; }
+    if [ "$method" = "--merge" ] && [ -n "${FAKE_GH_NO_MERGE_COMMITS:-}" ]; then
+      echo "Merge commits are not allowed on this repository" >&2; exit 1; fi
+    if [ -n "${FAKE_GH_REQUIRE_REVIEW:-}" ]; then
+      [ -n "$auto" ] && { echo "auto-merge enabled"; exit 0; }
+      echo "X Pull request #$n is not mergeable: the base branch policy prohibits the merge. At least 1 approving review is required." >&2; exit 1
+    fi
+    if [ -n "${FAKE_GH_BEFORE_MERGE:-}" ] && [ -f "$FAKE_GH_BEFORE_MERGE" ]; then
+      bash "$FAKE_GH_BEFORE_MERGE"; rm -f "$FAKE_GH_BEFORE_MERGE"; fi
+    read -r _ head base _ < <(awk -v n="$n" '$1==n' "$S/prs")
+    w=$(mktemp -d); git clone -q "$FAKE_GH_REMOTE" "$w"; cd "$w"
+    git -c user.name=GitHub -c user.email=gh@x checkout -q "$base"
+    if [ "$method" = "--merge" ]; then
+      git -c user.name=GitHub -c user.email=gh@x merge -q --no-ff -m "Merge pull request #$n" "origin/$head" >/dev/null 2>&1 \
+        || { echo "Pull request #$n is not mergeable: the merge commit cannot be cleanly created." >&2; exit 1; }
+    else
+      git -c user.name=GitHub -c user.email=gh@x merge -q --squash "origin/$head" >/dev/null 2>&1 \
+        || { echo "Pull request #$n is not mergeable: the merge commit cannot be cleanly created." >&2; exit 1; }
+      git -c user.name=GitHub -c user.email=gh@x commit -q -m "PR #$n (squashed)"
+    fi
+    git push -q origin "$base"; rm -rf "$w"
+    sed -i '' "s/^$n \(.*\) open$/$n \1 merged/" "$S/prs"
+    # Simulate the live 502-after-merge: merged on GitHub, but the call errors.
+    if [ -n "${FAKE_GH_FLAKY_MERGE:-}" ] && [ ! -f "$S/flaked-merge" ]; then
+      touch "$S/flaked-merge"; echo "GraphQL: Merge already in progress (mergePullRequest)" >&2; exit 1; fi ;;
+  *) echo "fake-gh: unsupported: $*" >&2; exit 1 ;;
+esac
