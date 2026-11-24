@@ -14,6 +14,7 @@ The user treats a GitHub repository as a shared folder of notes. **You do the gi
 
 | User says | Run |
 | --- | --- |
+| "install brainsync", first-time setup | Follow `INSTALL.md` at the plugin root: `install-tools`, `signin`, then `setup` |
 | "set up / connect / join our brain (my-team/notes)" | `brain.sh setup <owner/repo> [folder]` (default folder `~/SecondBrain`) |
 | "pull", "get the latest", "what did others add" | `brain.sh pull` |
 | "push", "share", "upload my notes", "sync" | `brain.sh push "<one-line description>"`. For "sync", run `push` (it gets updates first) |
@@ -31,7 +32,7 @@ The user treats a GitHub repository as a shared folder of notes. **You do the gi
 
 1. **Never run git commands in the brain folder that change anything** (no `git commit/merge/reset/push/checkout/stash`, no editing `.git/`). They skip the script's protections. Read-only `git log` or `git diff` is fine if the user asks about history ("who changed the roadmap last week?"). Answer in plain words.
 2. **For push, write the description yourself**: a short summary of *what the notes are about* ("Added Q3 interview notes; updated pricing ideas"), not file names. Run `brain.sh status` first if you need to see what changed.
-3. **Not signed in to GitHub?** Tell the user to open the Terminal app (on Windows: PowerShell) and type `gh auth login -h github.com -p https --web`, then follow the browser page (it shows a one-time code to copy). Never ask for their password or token. Missing `gh` → `brew install gh` (Mac), `winget install --id GitHub.cli -e` in PowerShell (Windows, then restart Claude Code) or https://cli.github.com. If anything else about setup goes wrong, run `brain.sh doctor` and pass on its fixes.
+3. **Not signed in, or something missing?** Run `brain.sh install-tools` (installs what's missing, no admin), then `brain.sh signin`. It exits with code 3 after printing a one-time code: give the user the code, tell them to enter it on the GitHub page that opens (or github.com/login/device) and click Authorize, then run `brain.sh signin-wait`. Exit code 3 from any command means "waiting for the user". Say what they need to do and run it again once they're done. Never ask for their password or token. `brain.sh doctor` lists anything still wrong.
 4. The user can edit files in the brain folder with any app (Obsidian, VS Code, Finder, TextEdit) or ask you to write notes there. Either way, the next push shares them.
 5. **On Windows, always run the script with the Bash tool** (Git Bash), never PowerShell, and use forward slashes in its path. If there is no Bash tool, Git for Windows is missing: tell the user to type `winget install --id Git.Git -e` in PowerShell, then close and reopen Claude Code. If the script says a note is open in another app, ask them to close it (Word and Excel lock open files) and try again.
 6. **Don't put the brain folder inside iCloud Drive, OneDrive, Dropbox or Google Drive** (on Windows, Documents and Desktop are often inside OneDrive). The script refuses; suggest `~/SecondBrain`.

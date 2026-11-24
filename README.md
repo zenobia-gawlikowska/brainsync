@@ -14,6 +14,14 @@ With brainsync, git finally does the work.
   <a href="docs/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
 </p>
 
+## Install: just ask Claude
+
+In Claude Code, on a Mac, Windows or Linux computer, type:
+
+> install brainsync from github.com/zenobia-gawlikowska/brainsync
+
+Claude follows [INSTALL.md](INSTALL.md) and does the rest. It installs the plugin and the GitHub helper (no administrator rights needed), signs you in through your browser with a one-time code, and connects your team's notes. You only click **Install** or **Authorize** when asked, and tell Claude your team's repository name.
+
 A Claude Code skill that lets non-technical people use a GitHub repository as a **collective second brain**. They say "push" and "pull"; Claude handles saving, pull requests, merging and overlapping edits. It's a chat-native successor to [AcceleraTTy](https://github.com/zenobia-gawlikowska/acceleratty), which did the same thing with a local web UI.
 
 ## What the user sees
@@ -36,6 +44,7 @@ Claude: Got 3 updated notes from Alice and Bob: roadmap.md, pricing.md, ideas/pi
 | **pull** | Saves (commits) local edits → fetches → merges the shared main branch → resolves overlapping edits automatically. |
 | **push** | Everything pull does, then force-updates a personal branch `brain/<login>` → opens a PR (or reuses the open one) → merges it (merge commit, then squash, then rebase, whichever the repo allows) → deletes the branch → lines local history up with main. |
 | **status** | Unshared local edits, teammate updates you don't have yet, and a share still waiting for approval. |
+| **install-tools** / **signin** | Installs a user-only copy of `gh` from its official releases if missing (on a Mac, opens Apple's developer tools installer), and starts GitHub's browser sign-in in the background, printing the one-time code for Claude to pass on. Exit code 3 = waiting for the user. |
 | **doctor** | Checks the computer (OS, git and Apple's developer tools, `gh`, Homebrew PATH, sign-in, brain folder) and prints a plain fix for each problem. |
 
 ### Overlapping edits (ported from AcceleraTTy)
@@ -58,7 +67,7 @@ Claude then offers to merge the two versions sensibly, which AcceleraTTy couldn'
 - **Interrupted run** (laptop closed mid-merge): the next command finishes or aborts the half-done merge.
 - Plain-English errors for sign-in, permissions, repo not found, network trouble and files over 100 MB.
 
-## Install
+## Manual install
 
 Works on **macOS, Linux and Windows 10/11**. On Windows the script runs in Git Bash, which Claude Code uses for shell commands once Git for Windows is installed.
 
@@ -99,13 +108,13 @@ The notes folder (`~/SecondBrain` by default) is left alone. Delete it yourself 
 
 ## Tests
 
-`tests/run.sh` runs 45 end-to-end checks with two simulated users (alice and bob). They share a local bare repo through `tests/fake-gh`, a stand-in for the GitHub CLI that simulates PRs, required review, squash-only repos, races and GitHub's flaky responses. Nothing touches GitHub.
+`tests/run.sh` runs 49 end-to-end checks with two simulated users (alice and bob). They share a local bare repo through `tests/fake-gh`, a stand-in for the GitHub CLI that simulates PRs, required review, squash-only repos, races and GitHub's flaky responses. Nothing touches GitHub.
 
 ```bash
 bash tests/run.sh
 ```
 
-`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) on every push.
+`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) on every push. It also checks that `install-tools` really downloads a working GitHub helper on each of them.
 
 `tests/live.sh` runs the same scenarios against a **real** GitHub repository you own. Use a throwaway one: it creates PRs and toggles the squash-only setting.
 

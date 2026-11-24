@@ -138,6 +138,18 @@ check "long paths enabled" test "$(git -C "$T/dana" config core.longpaths)" = tr
 out=$(PATH="$W:$PATH" BRAIN_GH=/nonexistent/gh as dana doctor); echo "$out" | sed 's/^/    /'
 check "windows install hint" grep -q "winget install --id GitHub.cli" <<<"$out"
 
+echo "== sign-in without a terminal"
+touch "$FAKE_GH_STATE/signed-out-erin"
+out=$(as erin signin); code=$?; echo "$out" | sed 's/^/    /'
+check "signin waits for the user (exit 3)" test $code -eq 3
+check "signin shows the one-time code" grep -q "ABCD-1234" <<<"$out"
+out=$(as erin signin-wait); echo "$out" | sed 's/^/    /'
+check "signin-wait sees the sign-in" grep -q "Signed in to GitHub as erin" <<<"$out"
+
+echo "== install-tools when everything is there"
+out=$(as erin install-tools); echo "$out" | sed 's/^/    /'
+check "install-tools reports ready" grep -q "GitHub helper is ready" <<<"$out"
+
 echo "== doctor"
 out=$(as bob doctor); echo "$out" | sed 's/^/    /'
 check "doctor passes when ready" grep -q "Everything looks ready" <<<"$out"

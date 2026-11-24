@@ -2,11 +2,14 @@
 # Minimal stand-in for the GitHub CLI, backed by a local bare repo.
 # Env: FAKE_GH_REMOTE (bare repo path), FAKE_GH_STATE (dir), FAKE_GH_LOGIN,
 #      FAKE_GH_REQUIRE_REVIEW=1, FAKE_GH_NO_MERGE_COMMITS=1,
+#      $FAKE_GH_STATE/signed-out-<login> makes `auth status` fail until `auth login`
 #      FAKE_GH_BEFORE_MERGE (script run once before the next merge — simulates a race)
 set -uo pipefail
 S=$FAKE_GH_STATE; mkdir -p "$S"; touch "$S/prs"
 case "$1 ${2:-}" in
-  "auth status") exit 0 ;;
+  "auth status") [ -e "$S/signed-out-${FAKE_GH_LOGIN:-x}" ] && exit 1; exit 0 ;;
+  "auth login")  # device flow: show a code, "authorize" after a moment
+    echo "! First copy your one-time code: ABCD-1234"; sleep 1; rm -f "$S/signed-out-${FAKE_GH_LOGIN:-x}" ;;
   "auth git-credential") exit 0 ;;
   "api user")
     case "$4" in .login|'.name // .login') echo "$FAKE_GH_LOGIN" ;; .id) echo 42 ;; esac ;;

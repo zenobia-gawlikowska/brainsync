@@ -7,6 +7,10 @@
 #   brain.sh status                        what's changed / waiting
 #   brain.sh where                         print the brain folder
 #   brain.sh doctor                        check this computer is ready
+#   brain.sh install-tools                 install what's missing (no admin)
+#   brain.sh signin / signin-wait          sign in to GitHub via the browser
+#
+# Exit code 3 means "waiting for the user" (click Install, enter a code…).
 #
 # Design (ported from AcceleraTTy, plus a PR flow):
 #   * Local edits are always saved (committed) before anything else happens,
@@ -29,7 +33,8 @@ set -uo pipefail
 # adds them to the shell), so look there too. ORIG_PATH is kept for `doctor`.
 # On Windows, a freshly installed gh isn't on PATH until Claude Code restarts.
 ORIG_PATH=$PATH
-_extra="/opt/homebrew/bin:/usr/local/bin:/c/Program Files/GitHub CLI"
+TOOLS_DIR="${BRAINSYNC_TOOLS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/brainsync}"
+_extra="$TOOLS_DIR/bin:/opt/homebrew/bin:/usr/local/bin:/c/Program Files/GitHub CLI"
 if [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath >/dev/null 2>&1; then
   _extra="$_extra:$(cygpath -u "$LOCALAPPDATA")/Microsoft/WinGet/Links"
 fi
@@ -109,7 +114,7 @@ need_git() {
   return 0
 }
 
-SIGNIN_CMD="gh auth login -h github.com -p https --web"
+SIGNIN_CMD="gh auth login -h github.com -p https --web"   # what a person types; Claude uses `brain.sh signin`
 
 need_gh() {
   need_git
@@ -591,6 +596,101 @@ cmd_status() {
   return 0
 }
 
+# ── Installing what's missing, without admin rights ───────────────────────────
+download() {  # $1 url, $2 file
+  curl -fsSL --retry 3 -o "$2" "$1" 2>/dev/null || wget -q -O "$2" "$1" 2>/dev/null
+}
+
+install_gh() {  # user-local copy of the GitHub CLI from its official releases
+  local os arch ver url tmp exe f
+  case $(uname -s) in
+    Darwin) os=macOS ;; Linux) os=linux ;; MINGW*|MSYS*|CYGWIN*) os=windows ;;
+    *) die "I can't install the GitHub helper on this kind of computer. Install it from https://cli.github.com" ;;
+  esac
+  case $(uname -m) in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=386 ;; esac
+  [ $os = macOS ] && arch=universal
+  ver=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest 2>/dev/null | sed -n 's#.*/tag/v##p')
+  [ -n "$ver" ] || die "I couldn't reach GitHub to download its helper. Check your internet connection and ask again."
+  case $os in
+    macOS)   f="gh_${ver}_macOS_${arch}.zip" ;;
+    windows) f="gh_${ver}_windows_${arch}.zip" ;;
+    linux)   f="gh_${ver}_linux_${arch}.tar.gz" ;;
+  esac
+  url="https://github.com/cli/cli/releases/download/v${ver}/$f"
+  tmp=$(mktemp -d)
+  download "$url" "$tmp/$f" || { rm -rf "$tmp"; die "Downloading the GitHub helper failed. Check your internet connection and ask again."; }
+  case $f in
+    *.zip)
+      if command -v unzip >/dev/null 2>&1; then unzip -q "$tmp/$f" -d "$tmp/x"
+      else powershell.exe -NoProfile -Command "Expand-Archive -Force '$(cygpath -w "$tmp/$f")' '$(cygpath -w "$tmp/x")'" >/dev/null
+      fi ;;
+    *) mkdir -p "$tmp/x" && tar -xzf "$tmp/$f" -C "$tmp/x" ;;
+  esac
+  exe=$(find "$tmp/x" -type f \( -name gh -o -name gh.exe \) -path '*bin/*' | head -n 1)
+  [ -n "$exe" ] || { rm -rf "$tmp"; die "The GitHub helper download looked wrong. Install it from https://cli.github.com"; }
+  mkdir -p "$TOOLS_DIR/bin"
+  cp "$exe" "$TOOLS_DIR/bin/" && chmod +x "$TOOLS_DIR/bin/$(basename "$exe")"
+  rm -rf "$tmp"
+  ok "Installed the GitHub helper (version $ver) for you only, in $TOOLS_DIR/bin"
+}
+
+cmd_install_tools() {
+  if is_mac && { ! command -v git >/dev/null 2>&1 || mac_git_stub; }; then
+    xcode-select --install >/dev/null 2>&1 || true
+    warn "A window from Apple has opened asking to install developer tools. Click Install (it takes about 10 minutes), then tell me when it's finished."
+    exit 3
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    if is_windows; then die "Git for Windows is missing. Open PowerShell and type  winget install --id Git.Git -e  then reopen Claude Code."; fi
+    die "Git is missing. Ask whoever manages this computer to install it (for example: sudo apt install git)."
+  fi
+  ok "Git is ready."
+  if [ -n "${BRAINSYNC_FORCE_GH_DOWNLOAD:-}" ] || ! command -v "$GH" >/dev/null 2>&1; then
+    install_gh
+    GH=$TOOLS_DIR/bin/gh; [ -x "$GH" ] || GH=$TOOLS_DIR/bin/gh.exe
+    "$GH" --version >/dev/null 2>&1 || die "The GitHub helper was installed but won't start. Install it from https://cli.github.com"
+  else
+    ok "The GitHub helper is ready."
+  fi
+  if "$GH" auth status >/dev/null 2>&1; then
+    ok "You're signed in to GitHub."
+  else
+    info "Next: sign in to GitHub (run: brain.sh signin)."
+  fi
+}
+
+# ── GitHub sign-in that works without a terminal ──────────────────────────────
+# gh's browser sign-in runs in the background; we print its one-time code so
+# Claude can pass it on, then `signin-wait` waits until GitHub confirms.
+cmd_signin() {
+  need_git
+  command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed yet (run: brain.sh install-tools)."
+  if "$GH" auth status >/dev/null 2>&1; then ok "You're already signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null)."; return 0; fi
+  mkdir -p "$CONFIG_DIR"
+  local log="$CONFIG_DIR/signin.log" code="" i
+  : > "$log"
+  ( nohup "$GH" auth login -h github.com -p https --web --skip-ssh-key </dev/null >"$log" 2>&1 & ) 2>/dev/null
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    code=$(grep -o '[A-Z0-9]\{4\}-[A-Z0-9]\{4\}' "$log" 2>/dev/null | head -n 1)
+    [ -n "$code" ] && break
+    sleep 1
+  done
+  [ -n "$code" ] || die "I couldn't start the GitHub sign-in. Details for whoever helps you: $(tail -n 3 "$log" | tr '\n' ' ')"
+  ok "Your one-time code is:  $code"
+  info "Your browser should open GitHub. If it doesn't, go to https://github.com/login/device"
+  info "Type the code there, click Continue, then Authorize. Tell me when you've done it."
+  exit 3
+}
+
+cmd_signin_wait() {
+  local i
+  for i in $(seq 1 60); do
+    if "$GH" auth status >/dev/null 2>&1; then ok "Signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null)."; return 0; fi
+    sleep 3
+  done
+  die "GitHub hasn't confirmed the sign-in yet. Ask me to sign in again and I'll give you a new code."
+}
+
 cmd_doctor() {  # check every prerequisite and print a plain fix for each
   local bad=0 ghp svc dir
   printf 'Checking this computer…\n'
@@ -646,5 +746,8 @@ case ${1:-} in
   status) shift; cmd_status ;;
   where)  load_brain; printf '%s\n' "$BRAIN_DIR" ;;
   doctor) cmd_doctor ;;
-  *) printf 'usage: brain.sh setup <owner/repo> [folder] | pull | push [description] | status | where | doctor\n'; exit 1 ;;
+  install-tools) cmd_install_tools ;;
+  signin) cmd_signin ;;
+  signin-wait) cmd_signin_wait ;;
+  *) printf 'usage: brain.sh setup <owner/repo> [folder] | pull | push [description] | status | where | doctor | install-tools | signin | signin-wait\n'; exit 1 ;;
 esac
