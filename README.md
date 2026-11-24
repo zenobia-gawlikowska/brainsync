@@ -1,17 +1,17 @@
 # brainsync (spike)
 
 <p align="center">
-  <img src="docs/meme.jpg" alt="Hand-drawn stick figure labelled ME poking a red git logo labelled GIT with a stick, saying: C'mon, do the work" width="480">
+  <img src="https://raw.githubusercontent.com/zenobia-gawlikowska/brainsync/media/meme.jpg" alt="Hand-drawn stick figure labelled ME poking a red git logo labelled GIT with a stick, saying: C'mon, do the work" width="480">
 </p>
 
 With brainsync, git finally does the work.
 
 <p align="center">
-  <a href="docs/brainsync-now-git-does-the-work.mp4">
-    <img src="docs/video-poster.png" alt="Still from the explainer video: a stick figure surrounded by git jargon (commit, branch, rebase, pull request, merge conflict) next to the git ball" width="640">
+  <a href="https://github.com/zenobia-gawlikowska/brainsync/blob/media/brainsync-now-git-does-the-work.mp4">
+    <img src="https://raw.githubusercontent.com/zenobia-gawlikowska/brainsync/media/video-poster.png" alt="Still from the explainer video: a stick figure surrounded by git jargon (commit, branch, rebase, pull request, merge conflict) next to the git ball" width="640">
   </a>
   <br>
-  <a href="docs/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
+  <a href="https://github.com/zenobia-gawlikowska/brainsync/blob/media/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
 </p>
 
 ## Install: just ask Claude
@@ -114,7 +114,7 @@ The notes folder (`~/SecondBrain` by default) is left alone. Delete it yourself 
 bash tests/run.sh
 ```
 
-`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) on every push. It also checks that `install-tools` really downloads a working GitHub helper on each of them.
+`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) for every pull request and every push to `master`. It also checks that `install-tools` really downloads a working GitHub helper on each of them.
 
 `tests/live.sh` runs the same scenarios against a **real** GitHub repository you own. Use a throwaway one: it creates PRs and toggles the squash-only setting.
 

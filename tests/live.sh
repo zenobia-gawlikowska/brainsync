@@ -5,7 +5,7 @@
 # same GitHub account, different brain branch and author name).
 set -uo pipefail
 REPO=${1:?usage: live.sh owner/repo}
-HERE=$(cd "$(dirname "$0")" && pwd); BRAIN="$HERE/../skills/brain/scripts/brain.sh"
+HERE=$(cd "$(dirname "$0")" && pwd); BRAIN="$HERE/../skills/brainsync/scripts/brain.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 A()  { BRAINSYNC_CONFIG_DIR="$T/acfg" bash "$BRAIN" "$@"; }

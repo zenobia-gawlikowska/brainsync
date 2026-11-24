@@ -3,7 +3,7 @@
 # sharing a local bare repo through a fake GitHub CLI.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-BRAIN="$HERE/../skills/brain/scripts/brain.sh"
+BRAIN="$HERE/../skills/brainsync/scripts/brain.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export BRAIN_GH="$HERE/fake-gh" FAKE_GH_REMOTE="$T/remote.git" FAKE_GH_STATE="$T/gh"
 export GIT_CONFIG_GLOBAL="$T/gitconfig" GIT_CONFIG_NOSYSTEM=1

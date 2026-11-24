@@ -1,6 +1,7 @@
 name: tests
 on:
   push:
+    branches: [master]
   pull_request:
 jobs:
   test:
@@ -14,15 +15,6 @@ jobs:
       - name: Run end-to-end tests (Git Bash on Windows)
         shell: bash
         run: bash tests/run.sh
-
-  install-tools:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
       - name: Download a user-only GitHub helper
         shell: bash
         env:
@@ -30,5 +22,5 @@ jobs:
           GH_TOKEN: ""
         run: |
           export BRAINSYNC_TOOLS_DIR="$PWD/.tools"
-          bash skills/brain/scripts/brain.sh install-tools
+          bash skills/brainsync/scripts/brain.sh install-tools
           "$BRAINSYNC_TOOLS_DIR"/bin/gh* --version
