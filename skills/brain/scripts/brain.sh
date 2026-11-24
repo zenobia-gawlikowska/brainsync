@@ -602,23 +602,26 @@ download() {  # $1 url, $2 file
 }
 
 install_gh() {  # user-local copy of the GitHub CLI from its official releases
-  local os arch ver url tmp exe f
+  local os arch ver url tmp exe f name
   case $(uname -s) in
     Darwin) os=macOS ;; Linux) os=linux ;; MINGW*|MSYS*|CYGWIN*) os=windows ;;
     *) die "I can't install the GitHub helper on this kind of computer. Install it from https://cli.github.com" ;;
   esac
   case $(uname -m) in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=386 ;; esac
-  [ $os = macOS ] && arch=universal
   ver=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest 2>/dev/null | sed -n 's#.*/tag/v##p')
   [ -n "$ver" ] || die "I couldn't reach GitHub to download its helper. Check your internet connection and ask again."
+  # macOS zips are per chip (the universal build is only a .pkg installer).
   case $os in
-    macOS)   f="gh_${ver}_macOS_${arch}.zip" ;;
-    windows) f="gh_${ver}_windows_${arch}.zip" ;;
-    linux)   f="gh_${ver}_linux_${arch}.tar.gz" ;;
+    macOS)   set -- "gh_${ver}_macOS_${arch}.zip" "gh_${ver}_macOS_universal.zip" ;;
+    windows) set -- "gh_${ver}_windows_${arch}.zip" ;;
+    linux)   set -- "gh_${ver}_linux_${arch}.tar.gz" ;;
   esac
-  url="https://github.com/cli/cli/releases/download/v${ver}/$f"
-  tmp=$(mktemp -d)
-  download "$url" "$tmp/$f" || { rm -rf "$tmp"; die "Downloading the GitHub helper failed. Check your internet connection and ask again."; }
+  tmp=$(mktemp -d); f=""
+  for name in "$@"; do
+    url="https://github.com/cli/cli/releases/download/v${ver}/$name"
+    if download "$url" "$tmp/$name"; then f=$name; break; fi
+  done
+  [ -n "$f" ] || { rm -rf "$tmp"; die "Downloading the GitHub helper failed. Check your internet connection and ask again. Details for whoever helps you: tried $* from v$ver"; }
   case $f in
     *.zip)
       if command -v unzip >/dev/null 2>&1; then unzip -q "$tmp/$f" -d "$tmp/x"
