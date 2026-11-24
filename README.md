@@ -146,3 +146,7 @@ Result: 17 of 21 live checks passed. All 4 failures come from one race scenario 
 - **Permission prompts**: `SKILL.md` pre-approves `brain.sh` through `allowed-tools`. Check on a fresh install that push and pull no longer ask for permission.
 - **Windows on a real machine**: CI covers the script under Git Bash, but the whole onboarding (winget, sign-in, Claude Code choosing Bash over PowerShell, locked Office files) still needs one run on a fresh Windows account.
 - **Second real user**: live tests simulate "bob" with the same GitHub account. Testing with a real second collaborator would also cover permissions and author names.
+
+## License
+
+[MIT](LICENSE)
