@@ -8,7 +8,7 @@ Before you start, you need:
 - An **invitation** to your team's shared brain. The person who runs it sends this from GitHub. Open the email from GitHub and click **Accept invitation**.
 - A Claude subscription that includes Claude Code.
 
-> Windows isn't supported yet. These steps are for a Mac.
+> On Windows? Follow [First-time setup on Windows](first-time-setup-windows.md) instead.
 
 ## 1. Open Terminal
 

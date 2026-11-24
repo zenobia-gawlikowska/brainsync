@@ -20,7 +20,7 @@ Everyone who shares notes needs **write** access. Read-only access isn't support
 2. Click **Add people**, enter each person's GitHub username or email, and choose the **Write** role.
 3. Each person gets an email from GitHub and must click **Accept invitation** before setting up.
 
-Then send each person [First-time setup on a Mac](first-time-setup-mac.md) and the repository name.
+Then send each person [First-time setup on a Mac](first-time-setup-mac.md) or [First-time setup on Windows](first-time-setup-windows.md), and the repository name.
 
 ## 3. Decide whether shares need approval
 

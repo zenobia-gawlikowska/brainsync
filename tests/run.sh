@@ -119,6 +119,25 @@ check "nothing downloaded there" test ! -e "$T/home/Library/Mobile Documents/com
 echo "== sign-in helper uses the full path to gh"
 check "credential helper is absolute" grep -q "^!'/" <<<"$(git -C "$T/alice" config --get-all credential.helper | tail -1)"
 
+echo "== names Windows can't store get a warning"
+echo "x" > "$T/alice/Call 10:30.md"; echo "y" > "$T/alice/fine name.md"
+out=$(as alice push "names"); echo "$out" | sed 's/^/    /'
+check "warned about the colon" grep -q "won't work for teammates on Windows" <<<"$out"
+check "only the bad name listed" test "$(grep -c '•' <<<"$out")" -eq 1
+check "still shared" remote_has "Call 10:30.md"
+git -C "$T/alice" rm -q "Call 10:30.md"; as alice push "rename" >/dev/null; as bob pull >/dev/null
+
+echo "== Windows (Git Bash) behaviour, simulated"
+W="$T/winbin"; mkdir -p "$W"; printf '#!/bin/sh\necho MINGW64_NT-10.0\n' > "$W/uname"; chmod +x "$W/uname"
+out=$(PATH="$W:$PATH" HOME="$T/whome" as dana setup fake/brain "$T/whome/OneDrive - Acme/Brain"); echo "$out" | sed 's/^/    /'
+check "OneDrive folder refused" grep -q "inside OneDrive" <<<"$out"
+out=$(PATH="$W:$PATH" as dana setup fake/brain "$T/dana"); echo "$out" | sed 's/^/    /'
+check "windows setup works" grep -q "All set" <<<"$out"
+check "line endings handled" test "$(git -C "$T/dana" config core.autocrlf)" = true
+check "long paths enabled" test "$(git -C "$T/dana" config core.longpaths)" = true
+out=$(PATH="$W:$PATH" BRAIN_GH=/nonexistent/gh as dana doctor); echo "$out" | sed 's/^/    /'
+check "windows install hint" grep -q "winget install --id GitHub.cli" <<<"$out"
+
 echo "== doctor"
 out=$(as bob doctor); echo "$out" | sed 's/^/    /'
 check "doctor passes when ready" grep -q "Everything looks ready" <<<"$out"

@@ -60,9 +60,9 @@ Claude then offers to merge the two versions sensibly, which AcceleraTTy couldn'
 
 ## Install
 
-**Mac or Linux only.** Windows isn't supported yet.
+Works on **macOS, Linux and Windows 10/11**. On Windows the script runs in Git Bash, which Claude Code uses for shell commands once Git for Windows is installed.
 
-- **New to all this?** Follow [First-time setup on a Mac](docs/first-time-setup-mac.md). It walks through Terminal, Apple's developer tools, Homebrew, the GitHub helper, signing in and Claude Code.
+- **New to all this?** Follow [First-time setup on a Mac](docs/first-time-setup-mac.md) or [First-time setup on Windows](docs/first-time-setup-windows.md). They walk through the terminal, git, the GitHub helper, signing in and Claude Code.
 - **Running the shared brain for a team?** See [Running a shared brain](docs/owner-guide.md): creating the repository, inviting teammates with write access, and choosing whether shares need approval.
 
 If you already have Claude Code, git and the GitHub CLI (`gh auth login -h github.com -p https --web`):
@@ -78,7 +78,14 @@ To test a local checkout instead, use `claude plugin marketplace add /path/to/br
 
 ### Troubleshooting
 
-`brain.sh doctor` checks every prerequisite and prints a plain fix for each: Windows, missing or stub git on macOS (no developer tools yet), missing `gh` or Homebrew, Homebrew not on the shell's PATH, not signed in, a missing brain folder, or a brain folder inside iCloud, OneDrive, Dropbox or Google Drive. `setup` refuses cloud-synced folders, because sync apps can damage git's data.
+`brain.sh doctor` checks every prerequisite and prints a plain fix for each: missing git (or, on Windows, Git for Windows), stub git on macOS (no developer tools yet), missing `gh` or Homebrew, Homebrew not on the shell's PATH, not signed in, a missing brain folder, or a brain folder inside iCloud, OneDrive, Dropbox or Google Drive. `setup` refuses cloud-synced folders, because sync apps can damage git's data.
+
+### Windows specifics
+
+- `setup` turns on `core.autocrlf` (Windows line endings on disk, plain ones on GitHub) and `core.longpaths` for that folder only.
+- `gh` is found in `C:\Program Files\GitHub CLI` or the WinGet links folder even before Claude Code is restarted.
+- If Word or Excel has a note open and locked, the user is asked to close it. Nothing is lost.
+- Windows can't store names containing `: * ? " < > | \`, names ending in a space or dot, or names like `CON`. Push warns whoever adds such a name, on any platform, and pull explains it if one arrives.
 
 ### Uninstall
 
@@ -92,11 +99,13 @@ The notes folder (`~/SecondBrain` by default) is left alone. Delete it yourself 
 
 ## Tests
 
-`tests/run.sh` runs 37 end-to-end checks with two simulated users (alice and bob). They share a local bare repo through `tests/fake-gh`, a stand-in for the GitHub CLI that simulates PRs, required review, squash-only repos, races and GitHub's flaky responses. Nothing touches GitHub.
+`tests/run.sh` runs 45 end-to-end checks with two simulated users (alice and bob). They share a local bare repo through `tests/fake-gh`, a stand-in for the GitHub CLI that simulates PRs, required review, squash-only repos, races and GitHub's flaky responses. Nothing touches GitHub.
 
 ```bash
 bash tests/run.sh
 ```
+
+`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) on every push.
 
 `tests/live.sh` runs the same scenarios against a **real** GitHub repository you own. Use a throwaway one: it creates PRs and toggles the squash-only setting.
 
@@ -126,4 +135,5 @@ Result: 17 of 21 live checks passed. All 4 failures come from one race scenario 
 - **Required-review flow not tested live**: branch protection on a private repo needs a paid plan, and you can't approve your own PR, so it has only been tested with the fake `gh`.
 - **Sign-in from the chat**: users are told to run `gh auth login -h github.com -p https --web` in Terminal. Whether it also works through Claude Code's `!` prefix hasn't been tried.
 - **Permission prompts**: `SKILL.md` pre-approves `brain.sh` through `allowed-tools`. Check on a fresh install that push and pull no longer ask for permission.
+- **Windows on a real machine**: CI covers the script under Git Bash, but the whole onboarding (winget, sign-in, Claude Code choosing Bash over PowerShell, locked Office files) still needs one run on a fresh Windows account.
 - **Second real user**: live tests simulate "bob" with the same GitHub account. Testing with a real second collaborator would also cover permissions and author names.

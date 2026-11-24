@@ -21,16 +21,23 @@
 # Output is plain English meant to be relayed to a non-technical user.
 # Lines start with ✔ (done), ⚠ (needs attention / FYI) or ✖ (failed).
 # Exit codes: 0 ok, 1 failed, 2 shared but waiting for approval.
-# Compatible with macOS bash 3.2.
+# Compatible with macOS bash 3.2 and Git Bash on Windows (Git for Windows).
 
 set -uo pipefail
 
 # Homebrew's folders are often missing from PATH (people skip the step that
 # adds them to the shell), so look there too. ORIG_PATH is kept for `doctor`.
+# On Windows, a freshly installed gh isn't on PATH until Claude Code restarts.
 ORIG_PATH=$PATH
-for d in /opt/homebrew/bin /usr/local/bin; do
+_extra="/opt/homebrew/bin:/usr/local/bin:/c/Program Files/GitHub CLI"
+if [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath >/dev/null 2>&1; then
+  _extra="$_extra:$(cygpath -u "$LOCALAPPDATA")/Microsoft/WinGet/Links"
+fi
+_ifs=$IFS; IFS=:
+for d in $_extra; do
   case ":$PATH:" in *":$d:"*) ;; *) [ -d "$d" ] && PATH="$PATH:$d" ;; esac
 done
+IFS=$_ifs; unset _extra _ifs
 export PATH
 
 CONFIG_DIR="${BRAINSYNC_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/brainsync}"
@@ -76,12 +83,18 @@ explain() {
 
 # ── Preconditions ─────────────────────────────────────────────────────────────
 is_mac() { [ "$(uname -s)" = Darwin ]; }
+is_windows() { case $(uname -s) in MINGW*|MSYS*|CYGWIN*) return 0 ;; esac; return 1; }
 
-need_os() {
-  case $(uname -s) in
-    MINGW*|MSYS*|CYGWIN*) die "Sorry, the shared brain doesn't work on Windows yet. It works on a Mac or Linux computer." ;;
-  esac
-}
+need_os() { :; }  # macOS, Linux and Windows (Git Bash) are all supported
+
+# Install hints per platform.
+if is_windows; then
+  GIT_HINT="Install Git for Windows: open PowerShell and type  winget install --id Git.Git -e  then close and reopen Claude Code."
+  GH_HINT="Open PowerShell and type  winget install --id GitHub.cli -e  then close and reopen Claude Code."
+else
+  GIT_HINT="On a Mac, open Terminal and type: xcode-select --install"
+  GH_HINT="Install it from https://cli.github.com (Mac: brew install gh)."
+fi
 
 # On a Mac /usr/bin/git always exists, but it's only a stub that opens Apple's
 # installer until the developer tools are installed. Catch that first.
@@ -91,7 +104,7 @@ mac_git_stub() {
 
 need_git() {
   need_os
-  command -v git >/dev/null 2>&1 || die "Git isn't installed. On a Mac, open Terminal and type: xcode-select --install"
+  command -v git >/dev/null 2>&1 || die "Git isn't installed. $GIT_HINT"
   mac_git_stub && die "Your Mac needs Apple's free developer tools first. Open Terminal, type:  xcode-select --install  then click Install. Ask again when it has finished."
   return 0
 }
@@ -100,7 +113,7 @@ SIGNIN_CMD="gh auth login -h github.com -p https --web"
 
 need_gh() {
   need_git
-  command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed. Install it from https://cli.github.com (Mac: brew install gh)."
+  command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed. $GH_HINT"
   "$GH" auth status >/dev/null 2>&1 || die "You're not signed in to GitHub yet. Run:  $SIGNIN_CMD  then ask again."
 }
 
@@ -113,6 +126,8 @@ cloud_folder() {  # prints the service name if $1 is inside a synced folder
     "$HOME/Library/CloudStorage/Dropbox"*|"$HOME/Dropbox"*) echo Dropbox ;;
     "$HOME/Library/CloudStorage/GoogleDrive"*|"$HOME/Google Drive"*) echo "Google Drive" ;;
     "$HOME/Library/CloudStorage/"*) echo "a cloud-sync app" ;;
+    "$HOME/iCloudDrive"*) echo iCloud ;;                       # Windows
+    /[a-zA-Z]/"My Drive"*|/[a-zA-Z]/"Shared drives"*) echo "Google Drive" ;;  # Windows drive letter
     *) return 1 ;;
   esac
 }
@@ -155,6 +170,35 @@ recover_state() {
     save_local "Saved notes before returning to the shared copy" >/dev/null
     g checkout -q "$MAIN" 2>/dev/null || g checkout -q -b "$MAIN" || die "Your brain folder is in an unusual state. Ask a technical teammate to have a look."
   fi
+}
+
+# ── Names Windows can't use ───────────────────────────────────────────────────
+# A teammate on a Mac can create "Call 10:30.md"; Windows can't store it, so
+# Windows teammates would never get it. Warn whoever adds such a name.
+bad_windows_name() {  # $1 path; succeeds if some part is invalid on Windows
+  local part rest=$1 up
+  case $rest in *[:\*\?\"\<\>\|\\]*) return 0 ;; esac
+  while [ -n "$rest" ]; do
+    part=${rest%%/*}
+    case $part in *" "|*.) return 0 ;; esac
+    up=$(printf '%s' "${part%%.*}" | tr '[:lower:]' '[:upper:]')
+    case $up in CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]) return 0 ;; esac
+    [ "$rest" = "$part" ] && break
+    rest=${rest#*/}
+  done
+  return 1
+}
+
+warn_windows_names() {  # after save_local: check names added in unshared commits
+  local p list=""
+  while IFS= read -r p; do
+    [ -n "$p" ] && bad_windows_name "$p" && list="$list
+  • $p"
+  done <<EOF_NAMES
+$(g diff --name-only --diff-filter=AR "origin/$MAIN" HEAD 2>/dev/null)
+EOF_NAMES
+  [ -n "$list" ] && warn "These names won't work for teammates on Windows (avoid : * ? \" < > | \\ and names ending in a space or dot). Please rename them:$list"
+  return 0
 }
 
 # ── Save local edits (commit) ─────────────────────────────────────────────────
@@ -254,6 +298,12 @@ merge_ref() {  # $1 ref, $2 description for the history
     return 0
   fi
   g merge --abort >/dev/null 2>&1
+  case $out in
+    *"unable to unlink"*|*"unable to create file"*|*"Permission denied"*|*"Device or resource busy"*)
+      die "A note is open in another app (Word, Excel, an editor…), so I couldn't update it. Close it and ask again. Nothing was lost." ;;
+    *"invalid path"*)
+      die "A teammate shared a note whose name this computer can't store (Windows doesn't allow : * ? \" < > | in names). Ask them to rename it. Details: $(printf '%s' "$out" | grep -m1 'invalid path')" ;;
+  esac
   die "I couldn't combine your notes with $what. Details: $(printf '%s' "$out" | tail -n 2 | tr '\n' ' ')"
 }
 
@@ -289,7 +339,7 @@ get_updates() {  # fetch + merge teammates' work into mine, then report
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 cmd_setup() {
-  local repo=${1:-} dir=${2:-$HOME/SecondBrain} out login name id svc ghpath
+  local repo=${1:-} dir=${2:-$HOME/SecondBrain} out login name id svc ghpath apps
   [ -n "$repo" ] || die "Tell me which GitHub repository holds the shared brain (for example my-team/notes)."
   need_gh
   case $dir in /*) ;; *) dir="$PWD/$dir" ;; esac
@@ -319,9 +369,14 @@ cmd_setup() {
     g config --local user.email "${id:+$id+}$login@users.noreply.github.com"
   fi
 
+  if is_windows; then
+    g config --local core.autocrlf true   # Windows line endings on disk, plain ones on GitHub
+    g config --local core.longpaths true  # deep Obsidian folders exceed Windows' 260-character limit
+  fi
+
   # Ignore OS/editor clutter locally (doesn't touch the shared repo).
   mkdir -p "$BRAIN_DIR/.git/info"
-  for pat in '.DS_Store' 'Thumbs.db' '~$*' '*.swp' '.obsidian/workspace*' '.obsidian/cache'; do
+  for pat in '.DS_Store' 'Thumbs.db' 'desktop.ini' '~$*' '*.swp' '.obsidian/workspace*' '.obsidian/cache'; do
     grep -qxF "$pat" "$BRAIN_DIR/.git/info/exclude" 2>/dev/null || printf '%s\n' "$pat" >> "$BRAIN_DIR/.git/info/exclude"
   done
 
@@ -343,7 +398,8 @@ cmd_setup() {
   mkdir -p "$CONFIG_DIR"
   printf 'BRAIN_DIR=%s\n' "$BRAIN_DIR" > "$CONFIG_FILE"
   ok "All set. Your shared brain lives in: $BRAIN_DIR"
-  info "Edit or add files there with any app (Obsidian, VS Code, TextEdit…), then just say \"push\" or \"pull\"."
+  if is_windows; then apps="Obsidian, VS Code, Word, Notepad…"; else apps="Obsidian, VS Code, TextEdit…"; fi
+  info "Edit or add files there with any app ($apps), then just say \"push\" or \"pull\"."
 }
 
 cmd_pull() {
@@ -439,6 +495,7 @@ cmd_push() {
 
   [ -n "$msg" ] || msg="Notes from $LOGIN"
   save_local "$msg" || true
+  warn_windows_names
 
   # Bring in teammates' work AND anything of mine still waiting in an open PR
   # (e.g. pushed from another computer) so nothing is dropped by the update.
@@ -537,18 +594,17 @@ cmd_status() {
 cmd_doctor() {  # check every prerequisite and print a plain fix for each
   local bad=0 ghp svc dir
   printf 'Checking this computer…\n'
-  case $(uname -s) in
-    MINGW*|MSYS*|CYGWIN*) printf '✖ This is Windows. The shared brain only works on a Mac or Linux for now.\n'; exit 1 ;;
-  esac
   if ! command -v git >/dev/null 2>&1; then
-    printf '✖ Git is missing. Mac: open Terminal and type  xcode-select --install\n'; bad=1
+    printf '✖ Git is missing. %s\n' "$GIT_HINT"; bad=1
   elif mac_git_stub; then
     printf "✖ Apple's developer tools aren't installed. Open Terminal, type  xcode-select --install  and click Install.\n"; bad=1
   else
     ok "Git is installed."
   fi
   if ! ghp=$(command -v "$GH" 2>/dev/null); then
-    if is_mac && ! command -v brew >/dev/null 2>&1; then
+    if is_windows; then
+      printf '✖ The GitHub helper is missing. %s\n' "$GH_HINT"
+    elif is_mac && ! command -v brew >/dev/null 2>&1; then
       printf '✖ The GitHub helper is missing, and so is Homebrew (which installs it). Install Homebrew from https://brew.sh, then type  brew install gh\n'
     else
       printf '✖ The GitHub helper is missing. Mac: type  brew install gh   Other: https://cli.github.com\n'
@@ -557,7 +613,11 @@ cmd_doctor() {  # check every prerequisite and print a plain fix for each
   else
     ok "The GitHub helper is installed."
     if ! PATH=$ORIG_PATH command -v "$GH" >/dev/null 2>&1; then
+      if is_windows; then
+        warn "The GitHub helper was just installed. Close and reopen Claude Code so everything can find it."
+      else
       warn "Your Terminal can't find Homebrew's programs. Fix: type  echo 'eval \"\$($(dirname "$ghp")/brew shellenv)\"' >> ~/.zprofile  then open a new Terminal window."
+      fi
     fi
     if "$GH" auth status >/dev/null 2>&1; then
       ok "Signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null || echo '?')."

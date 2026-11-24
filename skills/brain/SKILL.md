@@ -31,10 +31,10 @@ The user treats a GitHub repository as a shared folder of notes. **You do the gi
 
 1. **Never run git commands in the brain folder that change anything** (no `git commit/merge/reset/push/checkout/stash`, no editing `.git/`). They skip the script's protections. Read-only `git log` or `git diff` is fine if the user asks about history ("who changed the roadmap last week?"). Answer in plain words.
 2. **For push, write the description yourself**: a short summary of *what the notes are about* ("Added Q3 interview notes; updated pricing ideas"), not file names. Run `brain.sh status` first if you need to see what changed.
-3. **Not signed in to GitHub?** Tell the user to open the Terminal app and type `gh auth login -h github.com -p https --web`, then follow the browser page (it shows a one-time code to copy). Never ask for their password or token. Missing `gh` → `brew install gh` (Mac) or https://cli.github.com. If anything else about setup goes wrong, run `brain.sh doctor` and pass on its fixes.
+3. **Not signed in to GitHub?** Tell the user to open the Terminal app (on Windows: PowerShell) and type `gh auth login -h github.com -p https --web`, then follow the browser page (it shows a one-time code to copy). Never ask for their password or token. Missing `gh` → `brew install gh` (Mac), `winget install --id GitHub.cli -e` in PowerShell (Windows, then restart Claude Code) or https://cli.github.com. If anything else about setup goes wrong, run `brain.sh doctor` and pass on its fixes.
 4. The user can edit files in the brain folder with any app (Obsidian, VS Code, Finder, TextEdit) or ask you to write notes there. Either way, the next push shares them.
-5. **Windows isn't supported.** If the user is on Windows, say so plainly instead of trying workarounds.
-6. **Don't put the brain folder inside iCloud Drive, OneDrive, Dropbox or Google Drive.** The script refuses; suggest `~/SecondBrain`.
+5. **On Windows, always run the script with the Bash tool** (Git Bash), never PowerShell, and use forward slashes in its path. If there is no Bash tool, Git for Windows is missing: tell the user to type `winget install --id Git.Git -e` in PowerShell, then close and reopen Claude Code. If the script says a note is open in another app, ask them to close it (Word and Excel lock open files) and try again.
+6. **Don't put the brain folder inside iCloud Drive, OneDrive, Dropbox or Google Drive** (on Windows, Documents and Desktop are often inside OneDrive). The script refuses; suggest `~/SecondBrain`.
 
 ## When notes overlapped (⚠ "changed the same note")
 
@@ -50,3 +50,4 @@ Then **offer to combine them**. This is where you add the most value. If the use
 - "Teammates kept sharing at the same moment" → wait a few seconds and push again once. If it fails twice, tell the user their notes are safe on this computer.
 - "You don't have permission" → the repository owner has to invite them as a collaborator on GitHub (Settings → Collaborators).
 - "No shared brain is connected yet" → ask which repository to use, then run `setup`.
+- ⚠ "names won't work for teammates on Windows" → offer to rename the listed files (for example replace `:` with `-`) and push again.
