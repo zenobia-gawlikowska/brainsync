@@ -1,17 +1,17 @@
 # brainsync (spike)
 
 <p align="center">
-  <img src="docs/meme.jpg" alt="Hand-drawn stick figure labelled ME poking a red git logo labelled GIT with a stick, saying: C'mon, do the work" width="480">
+  <img src="https://raw.githubusercontent.com/zenobia-gawlikowska/brainsync/media/meme.jpg" alt="Hand-drawn stick figure labelled ME poking a red git logo labelled GIT with a stick, saying: C'mon, do the work" width="480">
 </p>
 
 With brainsync, git finally does the work.
 
 <p align="center">
-  <a href="docs/brainsync-now-git-does-the-work.mp4">
-    <img src="docs/video-poster.png" alt="Still from the explainer video: a stick figure surrounded by git jargon (commit, branch, rebase, pull request, merge conflict) next to the git ball" width="640">
+  <a href="https://github.com/zenobia-gawlikowska/brainsync/blob/media/brainsync-now-git-does-the-work.mp4">
+    <img src="https://raw.githubusercontent.com/zenobia-gawlikowska/brainsync/media/video-poster.png" alt="Still from the explainer video: a stick figure surrounded by git jargon (commit, branch, rebase, pull request, merge conflict) next to the git ball" width="640">
   </a>
   <br>
-  <a href="docs/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
+  <a href="https://github.com/zenobia-gawlikowska/brainsync/blob/media/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
 </p>
 
 ## Install: just ask Claude

@@ -1,7 +1,7 @@
 ---
-name: brain
+name: brainsync
 description: Sync the user's shared team "second brain" — a GitHub repository of notes and documents — for people who know nothing about git. Use whenever the user says push, pull, sync, share my notes, upload, get the latest, download updates, "what's new", "what haven't I shared", or asks to set up / connect / join a shared brain, team notes or knowledge repo. Pull requests, merging and overlapping edits are handled automatically.
-allowed-tools: Bash(*/skills/brain/scripts/brain.sh *), Bash(*/skills/brain/scripts/brain.sh)
+allowed-tools: Bash(*/skills/brainsync/scripts/brain.sh *), Bash(*/skills/brainsync/scripts/brain.sh)
 ---
 
 # Shared brain

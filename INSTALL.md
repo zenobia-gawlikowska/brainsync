@@ -24,7 +24,7 @@ Every later step runs one script, `brain.sh`. Locate the newest copy (use `$CLAU
 
 - **Bash** (macOS, Linux, or Windows with Git Bash):
   ```bash
-  ls -d ~/.claude/plugins/cache/brainsync/brainsync/*/skills/brain/scripts/brain.sh | tail -n 1
+  ls -d ~/.claude/plugins/cache/brainsync/brainsync/*/skills/brainsync/scripts/brain.sh | tail -n 1
   ```
 - **Windows without a Bash tool** (PowerShell only): Git for Windows is missing, and it provides the bash that runs the script. Install it, then find bash:
   ```powershell
@@ -32,7 +32,7 @@ Every later step runs one script, `brain.sh`. Locate the newest copy (use `$CLAU
   ```
   Tell the person a Windows prompt may ask *"Do you want to allow this app to make changes?"* and to click **Yes**. Then use `& "$env:ProgramFiles\Git\bin\bash.exe" <path-to-brain.sh> <command>` for every step below, with `<path-to-brain.sh>` from:
   ```powershell
-  (Get-ChildItem "$HOME\.claude\plugins\cache\brainsync\brainsync\*\skills\brain\scripts\brain.sh" | Select-Object -Last 1).FullName
+  (Get-ChildItem "$HOME\.claude\plugins\cache\brainsync\brainsync\*\skills\brainsync\scripts\brain.sh" | Select-Object -Last 1).FullName
   ```
 
 Call the result `BRAIN`. Run it as `bash "$BRAIN" <command>`.
