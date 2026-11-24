@@ -19,6 +19,8 @@ check() {  # check <description> <command...>
   if "$@"; then PASS=$((PASS+1)); echo "  PASS $d"; else FAIL=$((FAIL+1)); echo "  FAIL $d"; fi
 }
 remote_file() { git --git-dir="$FAKE_GH_REMOTE" show "main:$1" 2>/dev/null; }
+sedi() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }  # portable sed -i
+hex() { od -An -tx1 | tr -d ' \n'; }                       # portable xxd -p
 remote_has()  { git --git-dir="$FAKE_GH_REMOTE" cat-file -e "main:$1" 2>/dev/null; }
 
 git init -q --bare -b main "$FAKE_GH_REMOTE"
@@ -47,8 +49,8 @@ check "no conflict markers anywhere" bash -c "! grep -rq '^<<<<<<<' '$T/bob' --e
 
 echo "== non-overlapping edits to the same file merge silently"
 printf 'one\ntwo\nthree\nfour\nfive\n' > "$T/alice/list.md"; as alice push >/dev/null; as bob pull >/dev/null
-sed -i '' 's/one/ONE/' "$T/alice/list.md"; as alice push >/dev/null
-sed -i '' 's/five/FIVE/' "$T/bob/list.md"; as bob push >/dev/null
+sedi 's/one/ONE/' "$T/alice/list.md"; as alice push >/dev/null
+sedi 's/five/FIVE/' "$T/bob/list.md"; as bob push >/dev/null
 check "both edits present" test "$(remote_file list.md | tr '\n' ' ')" = "ONE two three four FIVE "
 check "no backup for clean merge" bash -c "! git --git-dir='$FAKE_GH_REMOTE' cat-file -e 'main:list (your version).md' 2>/dev/null"
 
@@ -94,8 +96,8 @@ echo "== binary file conflict"
 printf '\x89PNG\x01' > "$T/alice/pic.png"; as alice push >/dev/null; as bob pull >/dev/null
 printf '\x89PNG\x02' > "$T/alice/pic.png"; as alice push >/dev/null
 printf '\x89PNG\x03' > "$T/bob/pic.png";   as bob push >/dev/null
-check "binary: shared version kept" test "$(remote_file pic.png | xxd -p)" = "89504e4702"
-check "binary: bob's version kept" test "$(remote_file 'pic (your version).png' | xxd -p)" = "89504e4703"
+check "binary: shared version kept" test "$(remote_file pic.png | hex)" = "89504e4702"
+check "binary: bob's version kept" test "$(remote_file 'pic (your version).png' | hex)" = "89504e4703"
 
 echo "== GitHub answers 502 but created the PR anyway"
 echo "flaky" > "$T/bob/flaky.md"
@@ -108,6 +110,52 @@ echo "flaky merge" > "$T/bob/flaky-merge.md"
 out=$(FAKE_GH_FLAKY_MERGE=1 BRAIN_BACKOFF=0 as bob push "flaky merge"); echo "$out" | sed 's/^/    /'
 check "push reported success" grep -q "Shared!" <<<"$out"
 check "file is on main" remote_has flaky-merge.md
+
+echo "== setup refuses a folder inside iCloud or OneDrive"
+out=$(HOME="$T/home" as carol setup fake/brain "$T/home/Library/Mobile Documents/com~apple~CloudDocs/Brain"); echo "$out" | sed 's/^/    /'
+check "iCloud folder refused" grep -q "inside iCloud" <<<"$out"
+check "nothing downloaded there" test ! -e "$T/home/Library/Mobile Documents/com~apple~CloudDocs/Brain"
+
+echo "== sign-in helper uses the full path to gh"
+check "credential helper is absolute" grep -q "^!'/" <<<"$(git -C "$T/alice" config --get-all credential.helper | tail -1)"
+
+echo "== names Windows can't store get a warning"
+echo "x" > "$T/alice/Call 10:30.md"; echo "y" > "$T/alice/fine name.md"
+out=$(as alice push "names"); echo "$out" | sed 's/^/    /'
+check "warned about the colon" grep -q "won't work for teammates on Windows" <<<"$out"
+check "only the bad name listed" test "$(grep -c '•' <<<"$out")" -eq 1
+check "still shared" remote_has "Call 10:30.md"
+git -C "$T/alice" rm -q "Call 10:30.md"; as alice push "rename" >/dev/null; as bob pull >/dev/null
+
+echo "== Windows (Git Bash) behaviour, simulated"
+W="$T/winbin"; mkdir -p "$W"; printf '#!/bin/sh\necho MINGW64_NT-10.0\n' > "$W/uname"; chmod +x "$W/uname"
+out=$(PATH="$W:$PATH" HOME="$T/whome" as dana setup fake/brain "$T/whome/OneDrive - Acme/Brain"); echo "$out" | sed 's/^/    /'
+check "OneDrive folder refused" grep -q "inside OneDrive" <<<"$out"
+out=$(PATH="$W:$PATH" as dana setup fake/brain "$T/dana"); echo "$out" | sed 's/^/    /'
+check "windows setup works" grep -q "All set" <<<"$out"
+check "line endings handled" test "$(git -C "$T/dana" config core.autocrlf)" = true
+check "long paths enabled" test "$(git -C "$T/dana" config core.longpaths)" = true
+out=$(PATH="$W:$PATH" BRAIN_GH=/nonexistent/gh as dana doctor); echo "$out" | sed 's/^/    /'
+check "windows install hint" grep -q "winget install --id GitHub.cli" <<<"$out"
+
+echo "== sign-in without a terminal"
+touch "$FAKE_GH_STATE/signed-out-erin"
+out=$(as erin signin); code=$?; echo "$out" | sed 's/^/    /'
+check "signin waits for the user (exit 3)" test $code -eq 3
+check "signin shows the one-time code" grep -q "ABCD-1234" <<<"$out"
+out=$(as erin signin-wait); echo "$out" | sed 's/^/    /'
+check "signin-wait sees the sign-in" grep -q "Signed in to GitHub as erin" <<<"$out"
+
+echo "== install-tools when everything is there"
+out=$(as erin install-tools); echo "$out" | sed 's/^/    /'
+check "install-tools reports ready" grep -q "GitHub helper is ready" <<<"$out"
+
+echo "== doctor"
+out=$(as bob doctor); echo "$out" | sed 's/^/    /'
+check "doctor passes when ready" grep -q "Everything looks ready" <<<"$out"
+out=$(BRAIN_GH=/nonexistent/gh as bob doctor); code=$?; echo "$out" | sed 's/^/    /'
+check "doctor flags missing gh" test $code -eq 1
+check "doctor explains the fix" grep -q "GitHub helper is missing" <<<"$out"
 
 echo "== status is clean at the end"
 out=$(as bob status); echo "$out" | sed 's/^/    /'

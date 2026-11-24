@@ -6,6 +6,11 @@
 #   brain.sh push [description]            share my notes (PR + auto-merge)
 #   brain.sh status                        what's changed / waiting
 #   brain.sh where                         print the brain folder
+#   brain.sh doctor                        check this computer is ready
+#   brain.sh install-tools                 install what's missing (no admin)
+#   brain.sh signin / signin-wait          sign in to GitHub via the browser
+#
+# Exit code 3 means "waiting for the user" (click Install, enter a code…).
 #
 # Design (ported from AcceleraTTy, plus a PR flow):
 #   * Local edits are always saved (committed) before anything else happens,
@@ -20,9 +25,25 @@
 # Output is plain English meant to be relayed to a non-technical user.
 # Lines start with ✔ (done), ⚠ (needs attention / FYI) or ✖ (failed).
 # Exit codes: 0 ok, 1 failed, 2 shared but waiting for approval.
-# Compatible with macOS bash 3.2.
+# Compatible with macOS bash 3.2 and Git Bash on Windows (Git for Windows).
 
 set -uo pipefail
+
+# Homebrew's folders are often missing from PATH (people skip the step that
+# adds them to the shell), so look there too. ORIG_PATH is kept for `doctor`.
+# On Windows, a freshly installed gh isn't on PATH until Claude Code restarts.
+ORIG_PATH=$PATH
+TOOLS_DIR="${BRAINSYNC_TOOLS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/brainsync}"
+_extra="$TOOLS_DIR/bin:/opt/homebrew/bin:/usr/local/bin:/c/Program Files/GitHub CLI"
+if [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath >/dev/null 2>&1; then
+  _extra="$_extra:$(cygpath -u "$LOCALAPPDATA")/Microsoft/WinGet/Links"
+fi
+_ifs=$IFS; IFS=:
+for d in $_extra; do
+  case ":$PATH:" in *":$d:"*) ;; *) [ -d "$d" ] && PATH="$PATH:$d" ;; esac
+done
+IFS=$_ifs; unset _extra _ifs
+export PATH
 
 CONFIG_DIR="${BRAINSYNC_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/brainsync}"
 CONFIG_FILE="$CONFIG_DIR/config"
@@ -47,7 +68,7 @@ explain() {
   local m=$1
   case $m in
     *"could not read Username"*|*"terminal prompts disabled"*|*"Authentication failed"*|*"returned error: 401"*|*"Bad credentials"*)
-      die "GitHub didn't accept your sign-in. Run:  gh auth login  and then try again." ;;
+      die "GitHub didn't accept your sign-in. Run:  $SIGNIN_CMD  and then try again." ;;
     *"Permission to"*"denied"*|*"returned error: 403"*|*"must have push access"*|*"Resource not accessible"*)
       die "You don't have permission to add to this brain. Ask its owner to add you as a collaborator on GitHub." ;;
     *"Repository not found"*|*"Could not resolve to a Repository"*|*"does not appear to be a git repository"*)
@@ -66,14 +87,54 @@ explain() {
 }
 
 # ── Preconditions ─────────────────────────────────────────────────────────────
-need_git() {
-  command -v git >/dev/null 2>&1 || die "Git isn't installed. On a Mac, open Terminal and type: xcode-select --install"
+is_mac() { [ "$(uname -s)" = Darwin ]; }
+is_windows() { case $(uname -s) in MINGW*|MSYS*|CYGWIN*) return 0 ;; esac; return 1; }
+
+need_os() { :; }  # macOS, Linux and Windows (Git Bash) are all supported
+
+# Install hints per platform.
+if is_windows; then
+  GIT_HINT="Install Git for Windows: open PowerShell and type  winget install --id Git.Git -e  then close and reopen Claude Code."
+  GH_HINT="Open PowerShell and type  winget install --id GitHub.cli -e  then close and reopen Claude Code."
+else
+  GIT_HINT="On a Mac, open Terminal and type: xcode-select --install"
+  GH_HINT="Install it from https://cli.github.com (Mac: brew install gh)."
+fi
+
+# On a Mac /usr/bin/git always exists, but it's only a stub that opens Apple's
+# installer until the developer tools are installed. Catch that first.
+mac_git_stub() {
+  is_mac && [ "$(command -v git)" = /usr/bin/git ] && ! xcode-select -p >/dev/null 2>&1
 }
+
+need_git() {
+  need_os
+  command -v git >/dev/null 2>&1 || die "Git isn't installed. $GIT_HINT"
+  mac_git_stub && die "Your Mac needs Apple's free developer tools first. Open Terminal, type:  xcode-select --install  then click Install. Ask again when it has finished."
+  return 0
+}
+
+SIGNIN_CMD="gh auth login -h github.com -p https --web"   # what a person types; Claude uses `brain.sh signin`
 
 need_gh() {
   need_git
-  command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed. Install it from https://cli.github.com (Mac: brew install gh)."
-  "$GH" auth status >/dev/null 2>&1 || die "You're not signed in to GitHub yet. Run:  gh auth login  (GitHub.com → HTTPS → Login with a web browser), then ask again."
+  command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed. $GH_HINT"
+  "$GH" auth status >/dev/null 2>&1 || die "You're not signed in to GitHub yet. Run:  $SIGNIN_CMD  then ask again."
+}
+
+# Notes folders inside iCloud, OneDrive, Dropbox or Google Drive get their
+# hidden git data rewritten by the sync app, which can damage it.
+cloud_folder() {  # prints the service name if $1 is inside a synced folder
+  case $1 in
+    "$HOME/Library/Mobile Documents"*) echo iCloud ;;
+    "$HOME/Library/CloudStorage/OneDrive"*|"$HOME/OneDrive"*) echo OneDrive ;;
+    "$HOME/Library/CloudStorage/Dropbox"*|"$HOME/Dropbox"*) echo Dropbox ;;
+    "$HOME/Library/CloudStorage/GoogleDrive"*|"$HOME/Google Drive"*) echo "Google Drive" ;;
+    "$HOME/Library/CloudStorage/"*) echo "a cloud-sync app" ;;
+    "$HOME/iCloudDrive"*) echo iCloud ;;                       # Windows
+    /[a-zA-Z]/"My Drive"*|/[a-zA-Z]/"Shared drives"*) echo "Google Drive" ;;  # Windows drive letter
+    *) return 1 ;;
+  esac
 }
 
 load_brain() {
@@ -114,6 +175,35 @@ recover_state() {
     save_local "Saved notes before returning to the shared copy" >/dev/null
     g checkout -q "$MAIN" 2>/dev/null || g checkout -q -b "$MAIN" || die "Your brain folder is in an unusual state. Ask a technical teammate to have a look."
   fi
+}
+
+# ── Names Windows can't use ───────────────────────────────────────────────────
+# A teammate on a Mac can create "Call 10:30.md"; Windows can't store it, so
+# Windows teammates would never get it. Warn whoever adds such a name.
+bad_windows_name() {  # $1 path; succeeds if some part is invalid on Windows
+  local part rest=$1 up
+  case $rest in *[:\*\?\"\<\>\|\\]*) return 0 ;; esac
+  while [ -n "$rest" ]; do
+    part=${rest%%/*}
+    case $part in *" "|*.) return 0 ;; esac
+    up=$(printf '%s' "${part%%.*}" | tr '[:lower:]' '[:upper:]')
+    case $up in CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]) return 0 ;; esac
+    [ "$rest" = "$part" ] && break
+    rest=${rest#*/}
+  done
+  return 1
+}
+
+warn_windows_names() {  # after save_local: check names added in unshared commits
+  local p list=""
+  while IFS= read -r p; do
+    [ -n "$p" ] && bad_windows_name "$p" && list="$list
+  • $p"
+  done <<EOF_NAMES
+$(g diff --name-only --diff-filter=AR "origin/$MAIN" HEAD 2>/dev/null)
+EOF_NAMES
+  [ -n "$list" ] && warn "These names won't work for teammates on Windows (avoid : * ? \" < > | \\ and names ending in a space or dot). Please rename them:$list"
+  return 0
 }
 
 # ── Save local edits (commit) ─────────────────────────────────────────────────
@@ -213,6 +303,12 @@ merge_ref() {  # $1 ref, $2 description for the history
     return 0
   fi
   g merge --abort >/dev/null 2>&1
+  case $out in
+    *"unable to unlink"*|*"unable to create file"*|*"Permission denied"*|*"Device or resource busy"*)
+      die "A note is open in another app (Word, Excel, an editor…), so I couldn't update it. Close it and ask again. Nothing was lost." ;;
+    *"invalid path"*)
+      die "A teammate shared a note whose name this computer can't store (Windows doesn't allow : * ? \" < > | in names). Ask them to rename it. Details: $(printf '%s' "$out" | grep -m1 'invalid path')" ;;
+  esac
   die "I couldn't combine your notes with $what. Details: $(printf '%s' "$out" | tail -n 2 | tr '\n' ' ')"
 }
 
@@ -248,10 +344,11 @@ get_updates() {  # fetch + merge teammates' work into mine, then report
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 cmd_setup() {
-  local repo=${1:-} dir=${2:-$HOME/SecondBrain} out login name id
+  local repo=${1:-} dir=${2:-$HOME/SecondBrain} out login name id svc ghpath apps
   [ -n "$repo" ] || die "Tell me which GitHub repository holds the shared brain (for example my-team/notes)."
   need_gh
   case $dir in /*) ;; *) dir="$PWD/$dir" ;; esac
+  svc=$(cloud_folder "$dir") && die "$dir is inside $svc, which can damage the shared brain's hidden files. Pick a folder outside it, for example ~/SecondBrain."
   if [ -d "$dir/.git" ]; then
     ok "The brain folder already exists at $dir — reconnecting it."
   else
@@ -263,10 +360,12 @@ cmd_setup() {
 
   # Use the GitHub sign-in for this folder only (no global git changes).
   g config --local --replace-all credential.helper ''
-  g config --local --add credential.helper "!$GH auth git-credential"
+  # Absolute path, so it still works when gh isn't on the shell's PATH.
+  ghpath=$(command -v "$GH")
+  g config --local --add credential.helper "!'$ghpath' auth git-credential"
 
   login=$("$GH" api user --jq .login 2>/dev/null)
-  [ -n "$login" ] || die "I couldn't read your GitHub account. Run:  gh auth login  and try again."
+  [ -n "$login" ] || die "I couldn't read your GitHub account. Run:  $SIGNIN_CMD  and try again."
   g config brainsync.login "$login"
   if [ -z "$(g config user.name || true)" ]; then
     name=$("$GH" api user --jq '.name // .login' 2>/dev/null); [ -n "$name" ] || name=$login
@@ -275,9 +374,14 @@ cmd_setup() {
     g config --local user.email "${id:+$id+}$login@users.noreply.github.com"
   fi
 
+  if is_windows; then
+    g config --local core.autocrlf true   # Windows line endings on disk, plain ones on GitHub
+    g config --local core.longpaths true  # deep Obsidian folders exceed Windows' 260-character limit
+  fi
+
   # Ignore OS/editor clutter locally (doesn't touch the shared repo).
   mkdir -p "$BRAIN_DIR/.git/info"
-  for pat in '.DS_Store' 'Thumbs.db' '~$*' '*.swp' '.obsidian/workspace*' '.obsidian/cache'; do
+  for pat in '.DS_Store' 'Thumbs.db' 'desktop.ini' '~$*' '*.swp' '.obsidian/workspace*' '.obsidian/cache'; do
     grep -qxF "$pat" "$BRAIN_DIR/.git/info/exclude" 2>/dev/null || printf '%s\n' "$pat" >> "$BRAIN_DIR/.git/info/exclude"
   done
 
@@ -299,7 +403,8 @@ cmd_setup() {
   mkdir -p "$CONFIG_DIR"
   printf 'BRAIN_DIR=%s\n' "$BRAIN_DIR" > "$CONFIG_FILE"
   ok "All set. Your shared brain lives in: $BRAIN_DIR"
-  info "Edit or add files there with any app (Obsidian, VS Code, TextEdit…), then just say \"push\" or \"pull\"."
+  if is_windows; then apps="Obsidian, VS Code, Word, Notepad…"; else apps="Obsidian, VS Code, TextEdit…"; fi
+  info "Edit or add files there with any app ($apps), then just say \"push\" or \"pull\"."
 }
 
 cmd_pull() {
@@ -395,6 +500,7 @@ cmd_push() {
 
   [ -n "$msg" ] || msg="Notes from $LOGIN"
   save_local "$msg" || true
+  warn_windows_names
 
   # Bring in teammates' work AND anything of mine still waiting in an open PR
   # (e.g. pushed from another computer) so nothing is dropped by the update.
@@ -490,11 +596,158 @@ cmd_status() {
   return 0
 }
 
+# ── Installing what's missing, without admin rights ───────────────────────────
+download() {  # $1 url, $2 file
+  curl -fsSL --retry 3 -o "$2" "$1" 2>/dev/null || wget -q -O "$2" "$1" 2>/dev/null
+}
+
+install_gh() {  # user-local copy of the GitHub CLI from its official releases
+  local os arch ver url tmp exe f
+  case $(uname -s) in
+    Darwin) os=macOS ;; Linux) os=linux ;; MINGW*|MSYS*|CYGWIN*) os=windows ;;
+    *) die "I can't install the GitHub helper on this kind of computer. Install it from https://cli.github.com" ;;
+  esac
+  case $(uname -m) in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; *) arch=386 ;; esac
+  [ $os = macOS ] && arch=universal
+  ver=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest 2>/dev/null | sed -n 's#.*/tag/v##p')
+  [ -n "$ver" ] || die "I couldn't reach GitHub to download its helper. Check your internet connection and ask again."
+  case $os in
+    macOS)   f="gh_${ver}_macOS_${arch}.zip" ;;
+    windows) f="gh_${ver}_windows_${arch}.zip" ;;
+    linux)   f="gh_${ver}_linux_${arch}.tar.gz" ;;
+  esac
+  url="https://github.com/cli/cli/releases/download/v${ver}/$f"
+  tmp=$(mktemp -d)
+  download "$url" "$tmp/$f" || { rm -rf "$tmp"; die "Downloading the GitHub helper failed. Check your internet connection and ask again."; }
+  case $f in
+    *.zip)
+      if command -v unzip >/dev/null 2>&1; then unzip -q "$tmp/$f" -d "$tmp/x"
+      else powershell.exe -NoProfile -Command "Expand-Archive -Force '$(cygpath -w "$tmp/$f")' '$(cygpath -w "$tmp/x")'" >/dev/null
+      fi ;;
+    *) mkdir -p "$tmp/x" && tar -xzf "$tmp/$f" -C "$tmp/x" ;;
+  esac
+  exe=$(find "$tmp/x" -type f \( -name gh -o -name gh.exe \) -path '*bin/*' | head -n 1)
+  [ -n "$exe" ] || { rm -rf "$tmp"; die "The GitHub helper download looked wrong. Install it from https://cli.github.com"; }
+  mkdir -p "$TOOLS_DIR/bin"
+  cp "$exe" "$TOOLS_DIR/bin/" && chmod +x "$TOOLS_DIR/bin/$(basename "$exe")"
+  rm -rf "$tmp"
+  ok "Installed the GitHub helper (version $ver) for you only, in $TOOLS_DIR/bin"
+}
+
+cmd_install_tools() {
+  if is_mac && { ! command -v git >/dev/null 2>&1 || mac_git_stub; }; then
+    xcode-select --install >/dev/null 2>&1 || true
+    warn "A window from Apple has opened asking to install developer tools. Click Install (it takes about 10 minutes), then tell me when it's finished."
+    exit 3
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    if is_windows; then die "Git for Windows is missing. Open PowerShell and type  winget install --id Git.Git -e  then reopen Claude Code."; fi
+    die "Git is missing. Ask whoever manages this computer to install it (for example: sudo apt install git)."
+  fi
+  ok "Git is ready."
+  if [ -n "${BRAINSYNC_FORCE_GH_DOWNLOAD:-}" ] || ! command -v "$GH" >/dev/null 2>&1; then
+    install_gh
+    GH=$TOOLS_DIR/bin/gh; [ -x "$GH" ] || GH=$TOOLS_DIR/bin/gh.exe
+    "$GH" --version >/dev/null 2>&1 || die "The GitHub helper was installed but won't start. Install it from https://cli.github.com"
+  else
+    ok "The GitHub helper is ready."
+  fi
+  if "$GH" auth status >/dev/null 2>&1; then
+    ok "You're signed in to GitHub."
+  else
+    info "Next: sign in to GitHub (run: brain.sh signin)."
+  fi
+}
+
+# ── GitHub sign-in that works without a terminal ──────────────────────────────
+# gh's browser sign-in runs in the background; we print its one-time code so
+# Claude can pass it on, then `signin-wait` waits until GitHub confirms.
+cmd_signin() {
+  need_git
+  command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed yet (run: brain.sh install-tools)."
+  if "$GH" auth status >/dev/null 2>&1; then ok "You're already signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null)."; return 0; fi
+  mkdir -p "$CONFIG_DIR"
+  local log="$CONFIG_DIR/signin.log" code="" i
+  : > "$log"
+  ( nohup "$GH" auth login -h github.com -p https --web --skip-ssh-key </dev/null >"$log" 2>&1 & ) 2>/dev/null
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    code=$(grep -o '[A-Z0-9]\{4\}-[A-Z0-9]\{4\}' "$log" 2>/dev/null | head -n 1)
+    [ -n "$code" ] && break
+    sleep 1
+  done
+  [ -n "$code" ] || die "I couldn't start the GitHub sign-in. Details for whoever helps you: $(tail -n 3 "$log" | tr '\n' ' ')"
+  ok "Your one-time code is:  $code"
+  info "Your browser should open GitHub. If it doesn't, go to https://github.com/login/device"
+  info "Type the code there, click Continue, then Authorize. Tell me when you've done it."
+  exit 3
+}
+
+cmd_signin_wait() {
+  local i
+  for i in $(seq 1 60); do
+    if "$GH" auth status >/dev/null 2>&1; then ok "Signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null)."; return 0; fi
+    sleep 3
+  done
+  die "GitHub hasn't confirmed the sign-in yet. Ask me to sign in again and I'll give you a new code."
+}
+
+cmd_doctor() {  # check every prerequisite and print a plain fix for each
+  local bad=0 ghp svc dir
+  printf 'Checking this computer…\n'
+  if ! command -v git >/dev/null 2>&1; then
+    printf '✖ Git is missing. %s\n' "$GIT_HINT"; bad=1
+  elif mac_git_stub; then
+    printf "✖ Apple's developer tools aren't installed. Open Terminal, type  xcode-select --install  and click Install.\n"; bad=1
+  else
+    ok "Git is installed."
+  fi
+  if ! ghp=$(command -v "$GH" 2>/dev/null); then
+    if is_windows; then
+      printf '✖ The GitHub helper is missing. %s\n' "$GH_HINT"
+    elif is_mac && ! command -v brew >/dev/null 2>&1; then
+      printf '✖ The GitHub helper is missing, and so is Homebrew (which installs it). Install Homebrew from https://brew.sh, then type  brew install gh\n'
+    else
+      printf '✖ The GitHub helper is missing. Mac: type  brew install gh   Other: https://cli.github.com\n'
+    fi
+    bad=1
+  else
+    ok "The GitHub helper is installed."
+    if ! PATH=$ORIG_PATH command -v "$GH" >/dev/null 2>&1; then
+      if is_windows; then
+        warn "The GitHub helper was just installed. Close and reopen Claude Code so everything can find it."
+      else
+      warn "Your Terminal can't find Homebrew's programs. Fix: type  echo 'eval \"\$($(dirname "$ghp")/brew shellenv)\"' >> ~/.zprofile  then open a new Terminal window."
+      fi
+    fi
+    if "$GH" auth status >/dev/null 2>&1; then
+      ok "Signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null || echo '?')."
+    else
+      printf '✖ Not signed in to GitHub. Type  %s\n' "$SIGNIN_CMD"; bad=1
+    fi
+  fi
+  if [ -f "$CONFIG_FILE" ]; then
+    dir=$(sed -n 's/^BRAIN_DIR=//p' "$CONFIG_FILE")
+    if [ -d "$dir/.git" ]; then
+      ok "Your shared brain is connected at $dir"
+      if svc=$(cloud_folder "$dir"); then warn "That folder is inside $svc, which can damage it. Ask me to move it somewhere else, like ~/SecondBrain."; fi
+    else
+      printf '✖ Your shared brain folder (%s) is missing. Ask me to set it up again.\n' "$dir"; bad=1
+    fi
+  else
+    info "No shared brain is connected yet. Say: set up our shared brain from <owner/repo>."
+  fi
+  [ $bad -eq 0 ] && ok "Everything looks ready." || exit 1
+}
+
 case ${1:-} in
   setup)  shift; cmd_setup "$@" ;;
   pull)   shift; cmd_pull ;;
   push)   shift; cmd_push "$*" ;;
   status) shift; cmd_status ;;
   where)  load_brain; printf '%s\n' "$BRAIN_DIR" ;;
-  *) printf 'usage: brain.sh setup <owner/repo> [folder] | pull | push [description] | status | where\n'; exit 1 ;;
+  doctor) cmd_doctor ;;
+  install-tools) cmd_install_tools ;;
+  signin) cmd_signin ;;
+  signin-wait) cmd_signin_wait ;;
+  *) printf 'usage: brain.sh setup <owner/repo> [folder] | pull | push [description] | status | where | doctor | install-tools | signin | signin-wait\n'; exit 1 ;;
 esac

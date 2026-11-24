@@ -1,6 +1,11 @@
 {
   "name": "brainsync",
-  "owner": { "name": "Zenobia Gawlikowska" },
+  "owner": {
+    "name": "Zenobia Gawlikowska"
+  },
+  "metadata": {
+    "description": "brainsync: share a GitHub repository as a team second brain by just saying push or pull."
+  },
   "plugins": [
     {
       "name": "brainsync",
