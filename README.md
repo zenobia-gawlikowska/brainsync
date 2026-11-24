@@ -114,7 +114,7 @@ The notes folder (`~/SecondBrain` by default) is left alone. Delete it yourself 
 bash tests/run.sh
 ```
 
-`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) on every push. It also checks that `install-tools` really downloads a working GitHub helper on each of them.
+`.github/workflows/test.yml` runs the suite on Ubuntu, macOS and Windows (Git Bash) for every pull request and every push to `master`. It also checks that `install-tools` really downloads a working GitHub helper on each of them.
 
 `tests/live.sh` runs the same scenarios against a **real** GitHub repository you own. Use a throwaway one: it creates PRs and toggles the squash-only setting.
 
