@@ -6,6 +6,7 @@
 #   brain.sh push [description]            share my notes (PR + auto-merge)
 #   brain.sh status                        what's changed / waiting
 #   brain.sh where                         print the brain folder
+#   brain.sh doctor                        check this computer is ready
 #
 # Design (ported from AcceleraTTy, plus a PR flow):
 #   * Local edits are always saved (committed) before anything else happens,
@@ -23,6 +24,14 @@
 # Compatible with macOS bash 3.2.
 
 set -uo pipefail
+
+# Homebrew's folders are often missing from PATH (people skip the step that
+# adds them to the shell), so look there too. ORIG_PATH is kept for `doctor`.
+ORIG_PATH=$PATH
+for d in /opt/homebrew/bin /usr/local/bin; do
+  case ":$PATH:" in *":$d:"*) ;; *) [ -d "$d" ] && PATH="$PATH:$d" ;; esac
+done
+export PATH
 
 CONFIG_DIR="${BRAINSYNC_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/brainsync}"
 CONFIG_FILE="$CONFIG_DIR/config"
@@ -47,7 +56,7 @@ explain() {
   local m=$1
   case $m in
     *"could not read Username"*|*"terminal prompts disabled"*|*"Authentication failed"*|*"returned error: 401"*|*"Bad credentials"*)
-      die "GitHub didn't accept your sign-in. Run:  gh auth login  and then try again." ;;
+      die "GitHub didn't accept your sign-in. Run:  $SIGNIN_CMD  and then try again." ;;
     *"Permission to"*"denied"*|*"returned error: 403"*|*"must have push access"*|*"Resource not accessible"*)
       die "You don't have permission to add to this brain. Ask its owner to add you as a collaborator on GitHub." ;;
     *"Repository not found"*|*"Could not resolve to a Repository"*|*"does not appear to be a git repository"*)
@@ -66,14 +75,46 @@ explain() {
 }
 
 # ── Preconditions ─────────────────────────────────────────────────────────────
-need_git() {
-  command -v git >/dev/null 2>&1 || die "Git isn't installed. On a Mac, open Terminal and type: xcode-select --install"
+is_mac() { [ "$(uname -s)" = Darwin ]; }
+
+need_os() {
+  case $(uname -s) in
+    MINGW*|MSYS*|CYGWIN*) die "Sorry, the shared brain doesn't work on Windows yet. It works on a Mac or Linux computer." ;;
+  esac
 }
+
+# On a Mac /usr/bin/git always exists, but it's only a stub that opens Apple's
+# installer until the developer tools are installed. Catch that first.
+mac_git_stub() {
+  is_mac && [ "$(command -v git)" = /usr/bin/git ] && ! xcode-select -p >/dev/null 2>&1
+}
+
+need_git() {
+  need_os
+  command -v git >/dev/null 2>&1 || die "Git isn't installed. On a Mac, open Terminal and type: xcode-select --install"
+  mac_git_stub && die "Your Mac needs Apple's free developer tools first. Open Terminal, type:  xcode-select --install  then click Install. Ask again when it has finished."
+  return 0
+}
+
+SIGNIN_CMD="gh auth login -h github.com -p https --web"
 
 need_gh() {
   need_git
   command -v "$GH" >/dev/null 2>&1 || die "The GitHub helper isn't installed. Install it from https://cli.github.com (Mac: brew install gh)."
-  "$GH" auth status >/dev/null 2>&1 || die "You're not signed in to GitHub yet. Run:  gh auth login  (GitHub.com → HTTPS → Login with a web browser), then ask again."
+  "$GH" auth status >/dev/null 2>&1 || die "You're not signed in to GitHub yet. Run:  $SIGNIN_CMD  then ask again."
+}
+
+# Notes folders inside iCloud, OneDrive, Dropbox or Google Drive get their
+# hidden git data rewritten by the sync app, which can damage it.
+cloud_folder() {  # prints the service name if $1 is inside a synced folder
+  case $1 in
+    "$HOME/Library/Mobile Documents"*) echo iCloud ;;
+    "$HOME/Library/CloudStorage/OneDrive"*|"$HOME/OneDrive"*) echo OneDrive ;;
+    "$HOME/Library/CloudStorage/Dropbox"*|"$HOME/Dropbox"*) echo Dropbox ;;
+    "$HOME/Library/CloudStorage/GoogleDrive"*|"$HOME/Google Drive"*) echo "Google Drive" ;;
+    "$HOME/Library/CloudStorage/"*) echo "a cloud-sync app" ;;
+    *) return 1 ;;
+  esac
 }
 
 load_brain() {
@@ -248,10 +289,11 @@ get_updates() {  # fetch + merge teammates' work into mine, then report
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 cmd_setup() {
-  local repo=${1:-} dir=${2:-$HOME/SecondBrain} out login name id
+  local repo=${1:-} dir=${2:-$HOME/SecondBrain} out login name id svc ghpath
   [ -n "$repo" ] || die "Tell me which GitHub repository holds the shared brain (for example my-team/notes)."
   need_gh
   case $dir in /*) ;; *) dir="$PWD/$dir" ;; esac
+  svc=$(cloud_folder "$dir") && die "$dir is inside $svc, which can damage the shared brain's hidden files. Pick a folder outside it, for example ~/SecondBrain."
   if [ -d "$dir/.git" ]; then
     ok "The brain folder already exists at $dir — reconnecting it."
   else
@@ -263,10 +305,12 @@ cmd_setup() {
 
   # Use the GitHub sign-in for this folder only (no global git changes).
   g config --local --replace-all credential.helper ''
-  g config --local --add credential.helper "!$GH auth git-credential"
+  # Absolute path, so it still works when gh isn't on the shell's PATH.
+  ghpath=$(command -v "$GH")
+  g config --local --add credential.helper "!'$ghpath' auth git-credential"
 
   login=$("$GH" api user --jq .login 2>/dev/null)
-  [ -n "$login" ] || die "I couldn't read your GitHub account. Run:  gh auth login  and try again."
+  [ -n "$login" ] || die "I couldn't read your GitHub account. Run:  $SIGNIN_CMD  and try again."
   g config brainsync.login "$login"
   if [ -z "$(g config user.name || true)" ]; then
     name=$("$GH" api user --jq '.name // .login' 2>/dev/null); [ -n "$name" ] || name=$login
@@ -490,11 +534,57 @@ cmd_status() {
   return 0
 }
 
+cmd_doctor() {  # check every prerequisite and print a plain fix for each
+  local bad=0 ghp svc dir
+  printf 'Checking this computer…\n'
+  case $(uname -s) in
+    MINGW*|MSYS*|CYGWIN*) printf '✖ This is Windows. The shared brain only works on a Mac or Linux for now.\n'; exit 1 ;;
+  esac
+  if ! command -v git >/dev/null 2>&1; then
+    printf '✖ Git is missing. Mac: open Terminal and type  xcode-select --install\n'; bad=1
+  elif mac_git_stub; then
+    printf "✖ Apple's developer tools aren't installed. Open Terminal, type  xcode-select --install  and click Install.\n"; bad=1
+  else
+    ok "Git is installed."
+  fi
+  if ! ghp=$(command -v "$GH" 2>/dev/null); then
+    if is_mac && ! command -v brew >/dev/null 2>&1; then
+      printf '✖ The GitHub helper is missing, and so is Homebrew (which installs it). Install Homebrew from https://brew.sh, then type  brew install gh\n'
+    else
+      printf '✖ The GitHub helper is missing. Mac: type  brew install gh   Other: https://cli.github.com\n'
+    fi
+    bad=1
+  else
+    ok "The GitHub helper is installed."
+    if ! PATH=$ORIG_PATH command -v "$GH" >/dev/null 2>&1; then
+      warn "Your Terminal can't find Homebrew's programs. Fix: type  echo 'eval \"\$($(dirname "$ghp")/brew shellenv)\"' >> ~/.zprofile  then open a new Terminal window."
+    fi
+    if "$GH" auth status >/dev/null 2>&1; then
+      ok "Signed in to GitHub as $("$GH" api user --jq .login 2>/dev/null || echo '?')."
+    else
+      printf '✖ Not signed in to GitHub. Type  %s\n' "$SIGNIN_CMD"; bad=1
+    fi
+  fi
+  if [ -f "$CONFIG_FILE" ]; then
+    dir=$(sed -n 's/^BRAIN_DIR=//p' "$CONFIG_FILE")
+    if [ -d "$dir/.git" ]; then
+      ok "Your shared brain is connected at $dir"
+      if svc=$(cloud_folder "$dir"); then warn "That folder is inside $svc, which can damage it. Ask me to move it somewhere else, like ~/SecondBrain."; fi
+    else
+      printf '✖ Your shared brain folder (%s) is missing. Ask me to set it up again.\n' "$dir"; bad=1
+    fi
+  else
+    info "No shared brain is connected yet. Say: set up our shared brain from <owner/repo>."
+  fi
+  [ $bad -eq 0 ] && ok "Everything looks ready." || exit 1
+}
+
 case ${1:-} in
   setup)  shift; cmd_setup "$@" ;;
   pull)   shift; cmd_pull ;;
   push)   shift; cmd_push "$*" ;;
   status) shift; cmd_status ;;
   where)  load_brain; printf '%s\n' "$BRAIN_DIR" ;;
-  *) printf 'usage: brain.sh setup <owner/repo> [folder] | pull | push [description] | status | where\n'; exit 1 ;;
+  doctor) cmd_doctor ;;
+  *) printf 'usage: brain.sh setup <owner/repo> [folder] | pull | push [description] | status | where | doctor\n'; exit 1 ;;
 esac

@@ -34,8 +34,8 @@ check "bob's copy kept" test "$(remote_file "ideas/pitch-$RUN (your version).md"
 echo "== different lines of the same note"
 l="list-$RUN.md"; step A pull >/dev/null; printf 'one\ntwo\nthree\nfour\nfive\n' > "$T/alice/$l"
 step A push "list"; step Bo pull >/dev/null
-sed -i '' 's/one/ONE/' "$T/alice/$l"; step A push "ONE"
-sed -i '' 's/five/FIVE/' "$T/bob/$l"; step Bo push "FIVE"; check "bob push ok" test $? -eq 0
+sed 's/one/ONE/' "$T/alice/$l" > "$T/x" && mv "$T/x" "$T/alice/$l"; step A push "ONE"
+sed 's/five/FIVE/' "$T/bob/$l" > "$T/x" && mv "$T/x" "$T/bob/$l"; step Bo push "FIVE"; check "bob push ok" test $? -eq 0
 check "both edits combined" test "$(remote_file "$l" | tr '\n' ' ')" = "ONE two three four FIVE "
 
 echo "== deleted by one, edited by the other"

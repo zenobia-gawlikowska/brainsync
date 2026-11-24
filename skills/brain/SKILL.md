@@ -1,6 +1,7 @@
 ---
 name: brain
 description: Sync the user's shared team "second brain" — a GitHub repository of notes and documents — for people who know nothing about git. Use whenever the user says push, pull, sync, share my notes, upload, get the latest, download updates, "what's new", "what haven't I shared", or asks to set up / connect / join a shared brain, team notes or knowledge repo. Pull requests, merging and overlapping edits are handled automatically.
+allowed-tools: Bash(*/skills/brain/scripts/brain.sh *), Bash(*/skills/brain/scripts/brain.sh)
 ---
 
 # Shared brain
@@ -18,6 +19,7 @@ The user treats a GitHub repository as a shared folder of notes. **You do the gi
 | "push", "share", "upload my notes", "sync" | `brain.sh push "<one-line description>"`. For "sync", run `push` (it gets updates first) |
 | "what's changed", "anything unshared?" | `brain.sh status` |
 | "where are my notes?" | `brain.sh where` |
+| "is everything set up?", "it doesn't work", before the first `setup` | `brain.sh doctor` (checks this computer and prints a plain fix for each problem) |
 
 ## How to talk to the user
 
@@ -29,8 +31,10 @@ The user treats a GitHub repository as a shared folder of notes. **You do the gi
 
 1. **Never run git commands in the brain folder that change anything** (no `git commit/merge/reset/push/checkout/stash`, no editing `.git/`). They skip the script's protections. Read-only `git log` or `git diff` is fine if the user asks about history ("who changed the roadmap last week?"). Answer in plain words.
 2. **For push, write the description yourself**: a short summary of *what the notes are about* ("Added Q3 interview notes; updated pricing ideas"), not file names. Run `brain.sh status` first if you need to see what changed.
-3. **Not signed in to GitHub?** Tell the user to type `! gh auth login` in this chat, then choose GitHub.com → HTTPS → "Login with a web browser". Never ask for their password or token. Missing `gh` → `brew install gh` (Mac) or https://cli.github.com.
+3. **Not signed in to GitHub?** Tell the user to open the Terminal app and type `gh auth login -h github.com -p https --web`, then follow the browser page (it shows a one-time code to copy). Never ask for their password or token. Missing `gh` → `brew install gh` (Mac) or https://cli.github.com. If anything else about setup goes wrong, run `brain.sh doctor` and pass on its fixes.
 4. The user can edit files in the brain folder with any app (Obsidian, VS Code, Finder, TextEdit) or ask you to write notes there. Either way, the next push shares them.
+5. **Windows isn't supported.** If the user is on Windows, say so plainly instead of trying workarounds.
+6. **Don't put the brain folder inside iCloud Drive, OneDrive, Dropbox or Google Drive.** The script refuses; suggest `~/SecondBrain`.
 
 ## When notes overlapped (⚠ "changed the same note")
 

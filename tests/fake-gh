@@ -49,7 +49,7 @@ case "$1 ${2:-}" in
       git -c user.name=GitHub -c user.email=gh@x commit -q -m "PR #$n (squashed)"
     fi
     git push -q origin "$base"; rm -rf "$w"
-    sed -i '' "s/^$n \(.*\) open$/$n \1 merged/" "$S/prs"
+    sed "s/^$n \(.*\) open$/$n \1 merged/" "$S/prs" > "$S/prs.tmp" && mv "$S/prs.tmp" "$S/prs"
     # Simulate the live 502-after-merge: merged on GitHub, but the call errors.
     if [ -n "${FAKE_GH_FLAKY_MERGE:-}" ] && [ ! -f "$S/flaked-merge" ]; then
       touch "$S/flaked-merge"; echo "GraphQL: Merge already in progress (mergePullRequest)" >&2; exit 1; fi ;;
