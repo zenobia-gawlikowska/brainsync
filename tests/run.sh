@@ -119,13 +119,35 @@ check "nothing downloaded there" test ! -e "$T/home/Library/Mobile Documents/com
 echo "== sign-in helper uses the full path to gh"
 check "credential helper is absolute" grep -q "^!'/" <<<"$(git -C "$T/alice" config --get-all credential.helper | tail -1)"
 
-echo "== names Windows can't store get a warning"
-echo "x" > "$T/alice/Call 10:30.md"; echo "y" > "$T/alice/fine name.md"
-out=$(as alice push "names"); echo "$out" | sed 's/^/    /'
-check "warned about the colon" grep -q "won't work for teammates on Windows" <<<"$out"
-check "only the bad name listed" test "$(grep -c '•' <<<"$out")" -eq 1
-check "still shared" remote_has "Call 10:30.md"
-git -C "$T/alice" rm -q "Call 10:30.md"; as alice push "rename" >/dev/null; as bob pull >/dev/null
+case $(uname -s) in
+  MINGW*|MSYS*|CYGWIN*)
+    # Windows can't create such a name, so test the receiving side: a
+    # teammate's note called "Call 10:30.md" arrives and is explained.
+    echo "== a teammate's note with a name Windows can't store"
+    # Built with plumbing in the shared repo: Windows can't check this file out.
+    R=(git --git-dir="$FAKE_GH_REMOTE" -c user.name=mac -c user.email=m@x)
+    blob=$(echo x | "${R[@]}" hash-object -w --stdin)
+    tree=$({ "${R[@]}" ls-tree main; printf '100644 blob %s\tCall 10:30.md\n' "$blob"; } | "${R[@]}" mktree)
+    "${R[@]}" update-ref refs/heads/main "$("${R[@]}" commit-tree "$tree" -p main -m "mac note")"
+    out=$(as bob pull); code=$?; echo "$out" | sed 's/^/    /'
+    check "pull fails safely" test $code -eq 1
+    check "explains the name problem" grep -q "name this computer can't store" <<<"$out"
+    tree=$("${R[@]}" ls-tree main | grep -v 'Call 10:30' | "${R[@]}" mktree)
+    "${R[@]}" update-ref refs/heads/main "$("${R[@]}" commit-tree "$tree" -p main -m "renamed")"
+    as bob pull >/dev/null && as alice pull >/dev/null
+    check "pull works again after the rename" test $? -eq 0
+    ;;
+  *)
+    echo "== names Windows can't store get a warning"
+    echo "x" > "$T/alice/Call 10:30.md"; echo "y" > "$T/alice/fine name.md"
+    out=$(as alice push "names"); echo "$out" | sed 's/^/    /'
+    check "warned about the colon" grep -q "won't work for teammates on Windows" <<<"$out"
+    check "only the bad name listed" test "$(grep -c '•' <<<"$out")" -eq 1
+    check "still shared" remote_has "Call 10:30.md"
+    git -C "$T/alice" rm -q "Call 10:30.md"; as alice push "rename" >/dev/null; as bob pull >/dev/null
+
+    ;;
+esac
 
 echo "== Windows (Git Bash) behaviour, simulated"
 W="$T/winbin"; mkdir -p "$W"; printf '#!/bin/sh\necho MINGW64_NT-10.0\n' > "$W/uname"; chmod +x "$W/uname"
