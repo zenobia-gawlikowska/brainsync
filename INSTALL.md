@@ -24,6 +24,8 @@ If the marketplace is already added or the plugin is already installed, these sa
 
 ### Codex
 
+This only works in Codex running on the person's own computer (the Codex app, IDE extension or CLI). If you are Codex Cloud (Codex in ChatGPT, running on OpenAI's computers), stop: tell the person brainsync needs Codex installed on their computer, because notes and sign-in live there.
+
 Codex loads personal skills from `~/.agents/skills`. Copy the skill folder there. This needs no git, so it also works on a Mac before Apple's developer tools are installed. Running it again updates the skill.
 
 - **macOS, Linux, or Git Bash on Windows:**

@@ -22,11 +22,13 @@ In Claude Code, on a Mac, Windows or Linux computer, type:
 
 Claude follows [INSTALL.md](INSTALL.md) and does the rest. It installs the plugin and the GitHub helper (no administrator rights needed), signs you in through your browser with a one-time code, and connects your team's notes. You only click **Install** or **Authorize** when asked, and tell Claude your team's repository name.
 
-**In OpenAI Codex**, type:
+**In OpenAI Codex on your computer** (the Codex app, the IDE extension or the `codex` command line), type:
 
 > install the brainsync skill: follow https://raw.githubusercontent.com/zenobia-gawlikowska/brainsync/master/INSTALL.md (the Codex steps)
 
 Codex copies the skill into `~/.agents/skills/brainsync`, then runs the same tool setup, sign-in and connection steps. Its sandbox may ask you to allow brainsync to use the network and your home folder. Say yes. To install by hand instead, run the commands under *Codex* in [INSTALL.md](INSTALL.md#codex). In a Codex chat you can then say "push" and "pull" as usual, or call the skill directly with `$brainsync`.
+
+> **Codex in ChatGPT (Codex Cloud, in the browser) doesn't work with brainsync.** It runs on OpenAI's computers, not yours: it can't see skills installed on your computer, can't keep your notes folder, and uses its own GitHub app instead of your sign-in, which gives a 404 on someone else's repository even when you're a collaborator. Install Codex on your computer instead.
 
 A Claude Code skill that lets non-technical people use a GitHub repository as a **collective second brain**. They say "push" and "pull"; Claude handles saving, pull requests, merging and overlapping edits. It's a chat-native successor to [AcceleraTTy](https://github.com/zenobia-gawlikowska/acceleratty), which did the same thing with a local web UI.
 
