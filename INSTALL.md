@@ -12,6 +12,8 @@ Every step is safe to repeat. If anything is interrupted, just start again from 
 
 ### Claude Code
 
+This only works in Claude Code running on the person's own computer (the desktop app or the `claude` terminal command). If you are running in Claude Code on the web (a cloud session in a remote container), stop: tell the person brainsync needs Claude Code on their computer, because notes and sign-in live there.
+
 Run these with your shell tool (Bash, or PowerShell on Windows if you don't have Bash):
 
 ```

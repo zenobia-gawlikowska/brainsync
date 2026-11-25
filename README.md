@@ -16,11 +16,13 @@ With brainsync, git finally does the work.
 
 ## Install: just ask Claude (or Codex)
 
-In Claude Code, on a Mac, Windows or Linux computer, type:
+In Claude Code **on your computer** (the Claude desktop app or the `claude` terminal command, on a Mac, Windows or Linux computer), type:
 
 > install brainsync from github.com/zenobia-gawlikowska/brainsync
 
 Claude follows [INSTALL.md](INSTALL.md) and does the rest. It installs the plugin and the GitHub helper (no administrator rights needed), signs you in through your browser with a one-time code, and connects your team's notes. You only click **Install** or **Authorize** when asked, and tell Claude your team's repository name.
+
+> **Claude Code on the web (claude.ai/code, or a cloud session started from the Claude app) doesn't work with brainsync.** It runs in a cloud container, not on your computer: your notes folder would end up there instead of on your computer, the GitHub sign-in can't open your browser, and it reaches GitHub through its own app rather than as you. Use Claude Code on your computer instead.
 
 **In OpenAI Codex on your computer** (the Codex app, the IDE extension or the `codex` command line), type:
 
