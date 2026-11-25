@@ -12,6 +12,8 @@ Every step is safe to repeat. If anything is interrupted, just start again from 
 
 ### Claude Code
 
+This only works in Claude Code running on the person's own computer (the desktop app or the `claude` terminal command). If you are running in Claude Code on the web (a cloud session in a remote container), stop: tell the person brainsync needs Claude Code on their computer, because notes and sign-in live there.
+
 Run these with your shell tool (Bash, or PowerShell on Windows if you don't have Bash):
 
 ```
@@ -23,6 +25,8 @@ claude plugin update brainsync@brainsync
 If the marketplace is already added or the plugin is already installed, these say so and succeed. That's fine.
 
 ### Codex
+
+This only works in Codex running on the person's own computer (the Codex app, IDE extension or CLI). If you are Codex Cloud (Codex in ChatGPT, running on OpenAI's computers), stop: tell the person brainsync needs Codex installed on their computer, because notes and sign-in live there.
 
 Codex loads personal skills from `~/.agents/skills`. Copy the skill folder there. This needs no git, so it also works on a Mac before Apple's developer tools are installed. Running it again updates the skill.
 
