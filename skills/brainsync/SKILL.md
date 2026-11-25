@@ -14,7 +14,7 @@ The user treats a GitHub repository as a shared folder of notes. **You do the gi
 
 | User says | Run |
 | --- | --- |
-| "install brainsync", first-time setup | Follow `INSTALL.md` at the plugin root: `install-tools`, `signin`, then `setup` |
+| "install brainsync", first-time setup | `brain.sh install-tools`, then `signin` (and `signin-wait`), then ask for the repository and run `setup`, then `doctor`. Full steps: https://github.com/zenobia-gawlikowska/brainsync/blob/master/INSTALL.md |
 | "set up / connect / join our brain (my-team/notes)" | `brain.sh setup <owner/repo> [folder]` (default folder `~/SecondBrain`) |
 | "pull", "get the latest", "what did others add" | `brain.sh pull` |
 | "push", "share", "upload my notes", "sync" | `brain.sh push "<one-line description>"`. For "sync", run `push` (it gets updates first) |

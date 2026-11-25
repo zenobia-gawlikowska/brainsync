@@ -1,4 +1,6 @@
-# Installing brainsync (instructions for Claude)
+# Installing brainsync (instructions for the AI assistant)
+
+These steps work in **Claude Code** and in **OpenAI Codex**. Only steps 1 and 2 differ between them.
 
 A person asked you to install brainsync, probably with a message like *"install brainsync from github.com/zenobia-gawlikowska/brainsync"*. They may know nothing about git, GitHub or terminals. **Do every step yourself.** Only ask them to do the few things only a person can do: click a button, enter a code in their browser, or tell you the name of their team's notes repository.
 
@@ -6,7 +8,9 @@ Talk to them in plain words. Don't use git jargon, and don't show them commands 
 
 Every step is safe to repeat. If anything is interrupted, just start again from step 1.
 
-## 1. Install the plugin
+## 1. Install the skill
+
+### Claude Code
 
 Run these with your shell tool (Bash, or PowerShell on Windows if you don't have Bash):
 
@@ -18,9 +22,35 @@ claude plugin update brainsync@brainsync
 
 If the marketplace is already added or the plugin is already installed, these say so and succeed. That's fine.
 
+### Codex
+
+Codex loads personal skills from `~/.agents/skills`. Copy the skill folder there. This needs no git, so it also works on a Mac before Apple's developer tools are installed. Running it again updates the skill.
+
+- **macOS, Linux, or Git Bash on Windows:**
+  ```bash
+  t=$(mktemp -d)
+  curl -fsSL https://codeload.github.com/zenobia-gawlikowska/brainsync/tar.gz/refs/heads/master | tar -xz -C "$t"
+  mkdir -p ~/.agents/skills && rm -rf ~/.agents/skills/brainsync
+  cp -R "$t/brainsync-master/skills/brainsync" ~/.agents/skills/brainsync && rm -rf "$t"
+  ```
+- **Windows PowerShell:**
+  ```powershell
+  $t = Join-Path $env:TEMP "brainsync-src"; Remove-Item -Recurse -Force $t -ErrorAction SilentlyContinue; New-Item -ItemType Directory $t | Out-Null
+  curl.exe -fsSL https://codeload.github.com/zenobia-gawlikowska/brainsync/tar.gz/refs/heads/master -o "$t\src.tgz"
+  tar -xzf "$t\src.tgz" -C $t
+  New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null; Remove-Item -Recurse -Force "$HOME\.agents\skills\brainsync" -ErrorAction SilentlyContinue
+  Copy-Item -Recurse "$t\brainsync-master\skills\brainsync" "$HOME\.agents\skills\brainsync"
+  ```
+
+Codex runs commands in a sandbox. These steps, and every brainsync command after them, need the network and write outside the current folder (to `~/.agents`, `~/.config/brainsync`, `~/.local/share/brainsync` and the notes folder). If the sandbox blocks a command, ask the person to approve running it with full access. Tell them it's only brainsync's own script talking to GitHub.
+
 ## 2. Find the script
 
-Every later step runs one script, `brain.sh`. Locate the newest copy (use `$CLAUDE_CONFIG_DIR` instead of `~/.claude` if it is set):
+Every later step runs one script, `brain.sh`.
+
+**In Codex** it is at `~/.agents/skills/brainsync/scripts/brain.sh` (on Windows: `$HOME\.agents\skills\brainsync\scripts\brain.sh`). If Codex runs your commands in PowerShell, Git for Windows must be installed (see below), and every step runs through its bash.
+
+**In Claude Code**, locate the newest copy (use `$CLAUDE_CONFIG_DIR` instead of `~/.claude` if it is set):
 
 - **Bash** (macOS, Linux, or Windows with Git Bash):
   ```bash
@@ -30,7 +60,7 @@ Every later step runs one script, `brain.sh`. Locate the newest copy (use `$CLAU
   ```powershell
   winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
   ```
-  Tell the person a Windows prompt may ask *"Do you want to allow this app to make changes?"* and to click **Yes**. Then use `& "$env:ProgramFiles\Git\bin\bash.exe" <path-to-brain.sh> <command>` for every step below, with `<path-to-brain.sh>` from:
+  Tell the person a Windows prompt may ask *"Do you want to allow this app to make changes?"* and to click **Yes**. Then use `& "$env:ProgramFiles\Git\bin\bash.exe" <path-to-brain.sh> <command>` for every step below. In Codex, `<path-to-brain.sh>` is the path above. In Claude Code it comes from:
   ```powershell
   (Get-ChildItem "$HOME\.claude\plugins\cache\brainsync\brainsync\*\skills\brainsync\scripts\brain.sh" | Select-Object -Last 1).FullName
   ```
@@ -84,6 +114,7 @@ bash "$BRAIN" doctor
 
 When it says everything is ready, tell them:
 
-> All done! Your team's notes are in the **SecondBrain** folder in your home folder. Open them with any app. From now on, just tell me **"pull"** to get your teammates' latest notes and **"push"** to share yours. (Start a new conversation first so I pick up the new skill.)
+> All done! Your team's notes are in the **SecondBrain** folder in your home folder. Open them with any app. From now on, just tell me **"pull"** to get your teammates' latest notes and **"push"** to share yours.
 
-On Windows, if you used PowerShell in step 2, also tell them to close and reopen Claude Code once, so it can use Git Bash from then on.
+- **Claude Code:** add *"Start a new conversation first so I pick up the new skill."* On Windows, if you used PowerShell in step 2, also tell them to close and reopen Claude Code once, so it can use Git Bash from then on.
+- **Codex** picks up the new skill on its own. If "push" or "pull" isn't recognised, tell them to restart Codex.

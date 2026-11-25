@@ -14,13 +14,19 @@ With brainsync, git finally does the work.
   <a href="https://github.com/zenobia-gawlikowska/brainsync/blob/media/brainsync-now-git-does-the-work.mp4"><b>▶ Watch the explainer: "Now git does the work"</b></a>
 </p>
 
-## Install: just ask Claude
+## Install: just ask Claude (or Codex)
 
 In Claude Code, on a Mac, Windows or Linux computer, type:
 
 > install brainsync from github.com/zenobia-gawlikowska/brainsync
 
 Claude follows [INSTALL.md](INSTALL.md) and does the rest. It installs the plugin and the GitHub helper (no administrator rights needed), signs you in through your browser with a one-time code, and connects your team's notes. You only click **Install** or **Authorize** when asked, and tell Claude your team's repository name.
+
+**In OpenAI Codex**, type:
+
+> install the brainsync skill: follow https://raw.githubusercontent.com/zenobia-gawlikowska/brainsync/master/INSTALL.md (the Codex steps)
+
+Codex copies the skill into `~/.agents/skills/brainsync`, then runs the same tool setup, sign-in and connection steps. Its sandbox may ask you to allow brainsync to use the network and your home folder. Say yes. To install by hand instead, run the commands under *Codex* in [INSTALL.md](INSTALL.md#codex). In a Codex chat you can then say "push" and "pull" as usual, or call the skill directly with `$brainsync`.
 
 A Claude Code skill that lets non-technical people use a GitHub repository as a **collective second brain**. They say "push" and "pull"; Claude handles saving, pull requests, merging and overlapping edits. It's a chat-native successor to [AcceleraTTy](https://github.com/zenobia-gawlikowska/acceleratty), which did the same thing with a local web UI.
 
@@ -97,6 +103,10 @@ To test a local checkout instead, use `claude plugin marketplace add /path/to/br
 - Windows can't store names containing `: * ? " < > | \`, names ending in a space or dot, or names like `CON`. Push warns whoever adds such a name, on any platform, and pull explains it if one arrives.
 
 ### Uninstall
+
+In Codex: `rm -rf ~/.agents/skills/brainsync ~/.config/brainsync` (Windows: delete `%USERPROFILE%\.agents\skills\brainsync`).
+
+In Claude Code:
 
 ```bash
 claude plugin uninstall brainsync@brainsync
